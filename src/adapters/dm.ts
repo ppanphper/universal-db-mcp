@@ -71,6 +71,10 @@ export class DMAdapter implements DbAdapter {
         user: this.config.user,
         password: this.config.password,
         database: this.config.database,
+        // 禁用消息加密以避免 OpenSSL 3.0 兼容性问题
+        // 如果需要加密连接，请确保达梦数据库服务器配置了兼容的加密算法
+        cipherPath: '',
+        loginEncrypt: false,
       };
 
       this.connection = await DM.getConnection(connectionConfig);
