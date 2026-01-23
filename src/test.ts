@@ -8,6 +8,7 @@
 import { MySQLAdapter } from './adapters/mysql.js';
 import { PostgreSQLAdapter } from './adapters/postgres.js';
 import { RedisAdapter } from './adapters/redis.js';
+import { OracleAdapter } from './adapters/oracle.js';
 
 async function testMySQL() {
   console.log('\n=== 测试 MySQL 适配器 ===\n');
@@ -122,6 +123,51 @@ async function testRedis() {
   }
 }
 
+async function testOracle() {
+  console.log('\n=== 测试 Oracle 适配器 ===\n');
+
+  const adapter = new OracleAdapter({
+    host: 'localhost',
+    port: 1521,
+    user: 'system',
+    password: 'password',
+    database: 'XEPDB1',
+  });
+
+  try {
+    console.log('1. 连接数据库...');
+    await adapter.connect();
+    console.log('✅ 连接成功');
+
+    console.log('\n2. 获取数据库结构...');
+    const schema = await adapter.getSchema();
+    console.log(`✅ 数据库: ${schema.databaseName}`);
+    console.log(`✅ 版本: ${schema.version}`);
+    console.log(`✅ 表数量: ${schema.tables.length}`);
+
+    if (schema.tables.length > 0) {
+      console.log(`\n3. 查看第一个表: ${schema.tables[0].name}`);
+      console.log(`   列数: ${schema.tables[0].columns.length}`);
+      console.log(`   主键: ${schema.tables[0].primaryKeys.join(', ')}`);
+    }
+
+    console.log('\n4. 执行简单查询...');
+    const result = await adapter.executeQuery('SELECT 1 FROM DUAL');
+    console.log(`✅ 查询成功，返回 ${result.rows.length} 行`);
+    console.log(`   执行时间: ${result.executionTime}ms`);
+
+    console.log('\n5. 测试写操作检测...');
+    console.log(`   SELECT 是写操作? ${adapter.isWriteOperation('SELECT * FROM users')}`);
+    console.log(`   DELETE 是写操作? ${adapter.isWriteOperation('DELETE FROM users')}`);
+    console.log(`   MERGE 是写操作? ${adapter.isWriteOperation('MERGE INTO users...')}`);
+
+    await adapter.disconnect();
+    console.log('\n✅ Oracle 测试完成');
+  } catch (error) {
+    console.error('❌ Oracle 测试失败:', error instanceof Error ? error.message : String(error));
+  }
+}
+
 // 主函数
 async function main() {
   console.log('🧪 MCP 数据库万能连接器 - 适配器测试\n');
@@ -139,6 +185,10 @@ async function main() {
 
   if (args.length === 0 || args.includes('redis')) {
     await testRedis();
+  }
+
+  if (args.length === 0 || args.includes('oracle')) {
+    await testOracle();
   }
 
   console.log('\n✅ 所有测试完成\n');

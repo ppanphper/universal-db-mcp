@@ -7,6 +7,7 @@
 - [MySQL 使用示例](#mysql-使用示例)
 - [PostgreSQL 使用示例](#postgresql-使用示例)
 - [Redis 使用示例](#redis-使用示例)
+- [Oracle 使用示例](#oracle-使用示例)
 - [Claude Desktop 配置示例](#claude-desktop-配置示例)
 - [常见使用场景](#常见使用场景)
 
@@ -182,6 +183,98 @@
 
 ---
 
+## Oracle 使用示例
+
+### 基础配置（只读模式）
+
+```json
+{
+  "mcpServers": {
+    "oracle-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "oracle",
+        "--host", "localhost",
+        "--port", "1521",
+        "--user", "system",
+        "--password", "your_password",
+        "--database", "XEPDB1"
+      ]
+    }
+  }
+}
+```
+
+### 使用 Service Name 连接
+
+```json
+{
+  "mcpServers": {
+    "oracle-prod": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "oracle",
+        "--host", "oracle-server.example.com",
+        "--port", "1521",
+        "--user", "app_user",
+        "--password", "secure_password",
+        "--database", "ORCL"
+      ]
+    }
+  }
+}
+```
+
+### 启用写入模式（谨慎使用）
+
+```json
+{
+  "mcpServers": {
+    "oracle-dev": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "oracle",
+        "--host", "localhost",
+        "--port", "1521",
+        "--user", "dev_user",
+        "--password", "dev_password",
+        "--database", "DEVDB",
+        "--danger-allow-write"
+      ]
+    }
+  }
+}
+```
+
+### 与 Claude 对话示例
+
+**用户**: 帮我查看 EMPLOYEES 表的结构
+
+**Claude 会自动**:
+1. 调用 `get_table_info` 工具
+2. 返回表的列信息、主键、索引等
+3. 注意：Oracle 表名通常为大写
+
+**用户**: 查询工资最高的 10 名员工
+
+**Claude 会自动**:
+1. 理解需求
+2. 生成 SQL: `SELECT * FROM EMPLOYEES ORDER BY SALARY DESC FETCH FIRST 10 ROWS ONLY`
+3. 调用 `execute_query` 工具执行
+4. 返回结果
+
+**用户**: 统计每个部门的员工数量
+
+**Claude 会自动**:
+1. 查看表结构
+2. 生成 SQL: `SELECT DEPARTMENT_ID, COUNT(*) as EMP_COUNT FROM EMPLOYEES GROUP BY DEPARTMENT_ID`
+3. 执行并返回结果
+
+---
+
 ## Claude Desktop 配置示例
 
 ### 同时连接多个数据库
@@ -224,6 +317,18 @@
         "--port", "6379",
         "--password", "cache_password"
       ]
+    },
+    "oracle-warehouse": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "oracle",
+        "--host", "oracle.example.com",
+        "--port", "1521",
+        "--user", "warehouse_user",
+        "--password", "warehouse_password",
+        "--database", "DWH"
+      ]
     }
   }
 }
@@ -234,6 +339,7 @@
 - "在 MySQL 生产库中查询..."
 - "从 PostgreSQL 分析库获取..."
 - "检查 Redis 缓存中的..."
+- "在 Oracle 数据仓库中统计..."
 
 ---
 

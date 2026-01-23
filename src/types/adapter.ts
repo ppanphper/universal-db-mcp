@@ -56,7 +56,7 @@ export interface QueryResult {
  */
 export interface SchemaInfo {
   /** 数据库类型 */
-  databaseType: 'mysql' | 'postgres' | 'redis';
+  databaseType: 'mysql' | 'postgres' | 'redis' | 'oracle';
   /** 数据库名称 */
   databaseName: string;
   /** 表信息列表 */
@@ -113,7 +113,7 @@ export interface IndexInfo {
  * 数据库连接配置
  */
 export interface DbConfig {
-  type: 'mysql' | 'postgres' | 'redis';
+  type: 'mysql' | 'postgres' | 'redis' | 'oracle';
   host: string;
   port: number;
   user?: string;

@@ -40,8 +40,17 @@
 1. 在 `src/adapters/` 下创建新文件（如 `mongodb.ts`）
 2. 实现 `DbAdapter` 接口
 3. 在 `src/index.ts` 中添加对应的 case 分支
-4. 更新 `README.md` 的支持列表
-5. 添加相应的 npm 依赖
+4. 在 `src/types/adapter.ts` 中更新类型定义
+5. 更新 `README.md` 的支持列表
+6. 添加相应的 npm 依赖
+
+### 参考示例
+
+可以参考现有的适配器实现：
+- **MySQL** (`src/adapters/mysql.ts`) - SQL 数据库的基础模式
+- **PostgreSQL** (`src/adapters/postgres.ts`) - 复杂的 Schema 查询
+- **Redis** (`src/adapters/redis.ts`) - NoSQL 数据库的适配
+- **Oracle** (`src/adapters/oracle.ts`) - 企业级数据库的完整实现
 
 ### 示例结构
 

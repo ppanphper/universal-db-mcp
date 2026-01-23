@@ -30,7 +30,8 @@
        "database",
        "mysql",
        "postgresql",
-       "redis"
+       "redis",
+       "oracle"
      ]
    }
    ```
@@ -118,6 +119,16 @@ docker run -it \
   --user root \
   --password password \
   --database mydb
+
+# Oracle 示例
+docker run -it \
+  universal-db-mcp:latest \
+  --type oracle \
+  --host host.docker.internal \
+  --port 1521 \
+  --user system \
+  --password oracle_password \
+  --database XEPDB1
 
 # 使用环境变量
 docker run -it \
@@ -268,6 +279,17 @@ GRANT CONNECT ON DATABASE mydb TO mcp_readonly;
 GRANT USAGE ON SCHEMA public TO mcp_readonly;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO mcp_readonly;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO mcp_readonly;
+```
+
+**Oracle**:
+```sql
+-- 创建只读用户
+CREATE USER mcp_readonly IDENTIFIED BY secure_password;
+GRANT CREATE SESSION TO mcp_readonly;
+GRANT SELECT ANY TABLE TO mcp_readonly;
+
+-- 或者授予特定表的权限
+GRANT SELECT ON schema.table_name TO mcp_readonly;
 ```
 
 ### 2. 使用环境变量存储密码
