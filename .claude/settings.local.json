@@ -19,7 +19,14 @@
       "Bash(python:*)",
       "Bash(npm view mssql version)",
       "Bash(npm install mongodb)",
-      "Bash(npm ls mongodb)"
+      "Bash(npm ls mongodb)",
+      "Bash(npm view universal-db-mcp version)",
+      "Bash(npm view mongodb@6.21.0 dist.tarball)",
+      "WebSearch",
+      "Bash(npm view mongodb@6.21.0 main)",
+      "Bash(npm view mongodb@6.21.0 type)",
+      "Bash(npm view mongodb@6.21.0 exports)",
+      "Bash(npm view mongodb@5 version)"
     ]
   }
 }
