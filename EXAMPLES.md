@@ -15,6 +15,7 @@
 - [KingbaseES 使用示例](#kingbasees-使用示例)
 - [GaussDB / OpenGauss 使用示例](#gaussdb--opengauss-使用示例)
 - [OceanBase 使用示例](#oceanbase-使用示例)
+- [TiDB 使用示例](#tidb-使用示例)
 - [Claude Desktop 配置示例](#claude-desktop-配置示例)
 - [常见使用场景](#常见使用场景)
 
@@ -1310,6 +1311,181 @@ Claude 会:
 - **高可用**: 自动故障转移和数据恢复
 - **弹性扩展**: 支持在线扩容和缩容
 - **HTAP**: 同时支持 OLTP 和 OLAP 场景
+
+**注意**: 这些特色功能可能需要特定的 SQL 语法或系统表查询,Claude 会根据标准 MySQL 语法生成查询。
+
+---
+
+## TiDB 使用示例
+
+### 基础配置（只读模式）
+
+```json
+{
+  "mcpServers": {
+    "tidb-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "tidb",
+        "--host", "localhost",
+        "--port", "4000",
+        "--user", "root",
+        "--password", "",
+        "--database", "test"
+      ]
+    }
+  }
+}
+```
+
+### 启用写入模式
+
+```json
+{
+  "mcpServers": {
+    "tidb-write": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "tidb",
+        "--host", "localhost",
+        "--port", "4000",
+        "--user", "root",
+        "--password", "your_password",
+        "--database", "mydb",
+        "--danger-allow-write"
+      ]
+    }
+  }
+}
+```
+
+### 连接 TiDB Cloud
+
+```json
+{
+  "mcpServers": {
+    "tidb-cloud": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "tidb",
+        "--host", "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",
+        "--port", "4000",
+        "--user", "your_username",
+        "--password", "your_password",
+        "--database", "production"
+      ]
+    }
+  }
+}
+```
+
+### 与 Claude 对话示例
+
+**用户**: 查看数据库中有哪些表？
+
+**Claude 会自动**:
+1. 调用 `get_schema` 工具
+2. 执行 `SHOW TABLES` 查询
+3. 返回表列表
+
+**用户**: 查看 employees 表的结构
+
+**Claude 会自动**:
+1. 调用 `get_table_info` 工具
+2. 执行 `SHOW FULL COLUMNS FROM employees`
+3. 返回列信息、主键、索引等详细信息
+
+**用户**: 统计每个部门的员工数量
+
+**Claude 会自动**:
+1. 理解需求
+2. 生成 SQL: `SELECT department, COUNT(*) as employee_count FROM employees GROUP BY department ORDER BY employee_count DESC`
+3. 执行并返回结果
+
+**用户**: 查找最近一周入职的员工
+
+**Claude 会自动**:
+1. 生成 SQL: `SELECT * FROM employees WHERE hire_date >= DATE_SUB(NOW(), INTERVAL 7 DAY) ORDER BY hire_date DESC`
+2. 执行并返回结果
+
+### 注意事项
+
+1. **默认端口**: 4000（TiDB Server 端口）
+2. **兼容性**: 兼容 MySQL 5.7 协议和大部分 SQL 语法
+3. **驱动**: 使用 MySQL 的 `mysql2` 驱动
+4. **分布式**: TiDB 是分布式数据库，支持水平扩展
+5. **HTAP**: 同时支持 OLTP 和 OLAP 工作负载
+6. **事务**: 支持完整的 ACID 分布式事务
+
+### 支持的版本
+
+- ✅ TiDB 5.x
+- ✅ TiDB 6.x
+- ✅ TiDB 7.x
+- ✅ TiDB 8.x
+- ✅ TiDB Cloud
+
+### 常见使用场景
+
+#### 1. 分布式数据库管理
+
+连接 TiDB 集群进行数据查询和分析：
+
+```
+用户: 帮我分析用户表的数据分布
+
+Claude 会:
+1. 查询用户表
+2. 统计各个维度的数据
+3. 生成分析报告
+```
+
+#### 2. 从 MySQL 迁移到 TiDB
+
+```
+用户: 帮我分析现有 MySQL 表结构，准备迁移到 TiDB
+
+Claude 会:
+1. 获取完整的 Schema 信息
+2. 分析表结构、索引、约束
+3. 提供迁移建议和兼容性分析
+```
+
+#### 3. 性能优化
+
+```
+用户: 这个查询在 TiDB 上很慢，帮我优化
+
+Claude 会:
+1. 分析查询语句
+2. 检查索引情况
+3. 提供优化建议（考虑分布式特性）
+```
+
+#### 4. HTAP 场景
+
+```
+用户: 对大表进行复杂的聚合分析
+
+Claude 会:
+1. 生成适合 OLAP 的查询语句
+2. 利用 TiFlash 列式存储加速查询
+3. 返回分析结果
+```
+
+### TiDB 特色功能
+
+虽然兼容 MySQL 5.7 协议，但 TiDB 有一些特色功能：
+
+- **水平扩展**: 支持在线水平扩展，无需停机
+- **分布式事务**: 支持跨节点的 ACID 事务
+- **高可用**: 自动故障转移和数据恢复
+- **HTAP**: 同时支持 OLTP 和 OLAP 场景
+- **TiFlash**: 列式存储引擎，加速 OLAP 查询
+- **弹性扩展**: 支持在线扩容和缩容
 
 **注意**: 这些特色功能可能需要特定的 SQL 语法或系统表查询，Claude 会根据标准 MySQL 语法生成查询。
 

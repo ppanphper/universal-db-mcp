@@ -52,6 +52,8 @@
 - **Redis** (`src/adapters/redis.ts`) - NoSQL 数据库的适配
 - **Oracle** (`src/adapters/oracle.ts`) - 企业级数据库的完整实现
 - **达梦** (`src/adapters/dm.ts`) - 国产数据库适配，兼容 Oracle
+- **OceanBase** (`src/adapters/oceanbase.ts`) - 分布式数据库，兼容 MySQL
+- **TiDB** (`src/adapters/tidb.ts`) - 分布式 NewSQL 数据库，兼容 MySQL 5.7
 
 ### 示例结构
 
