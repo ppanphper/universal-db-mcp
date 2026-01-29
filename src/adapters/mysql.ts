@@ -114,175 +114,184 @@ export class MySQLAdapter implements DbAdapter {
   }
 
   /**
-   * 获取数据库结构信息（批量查询优化版本）
+   * 获取数据库结构信息（批量查询优化版本 + 按需加载）
    *
-   * 优化前：每个表需要 4 次查询（列、主键、索引、行数）
-   * 优化后：只需要 4 次查询获取所有表的信息
+   * 优化说明：
+   * 1. 批量查询：一次性获取所有/指定表的元数据，避免 N+1 查询。
+   * 2. 按需加载：支持 tableNames 参数，只获取需要的表结构，极大降低大规模数据库的加载开销。
    */
-  async getSchema(): Promise<SchemaInfo> {
+  async getSchema(tableNames?: string[]): Promise<SchemaInfo> {
     if (!this.connection) {
       throw new Error('数据库未连接');
     }
 
     try {
-      // 获取数据库版本
+      // 1. 获取基础信息
       const [versionRows] = await this.connection.query('SELECT VERSION() as version');
       const version = (versionRows as any[])[0]?.version || 'unknown';
 
-      // 获取当前数据库名
       const [dbRows] = await this.connection.query('SELECT DATABASE() as db');
       const databaseName = (dbRows as any[])[0]?.db || this.config.database || 'unknown';
 
-      // 批量获取所有表的列信息
-      const [allColumns] = await this.connection.query(`
-        SELECT
-          TABLE_NAME,
-          COLUMN_NAME,
-          COLUMN_TYPE,
-          IS_NULLABLE,
-          COLUMN_DEFAULT,
-          COLUMN_KEY,
-          COLUMN_COMMENT,
-          ORDINAL_POSITION
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-        ORDER BY TABLE_NAME, ORDINAL_POSITION
-      `) as [mysql.RowDataPacket[], mysql.FieldPacket[]];
+      // 2. 批量获取表信息
+      let tableQuery = `
+        SELECT TABLE_NAME, TABLE_ROWS, TABLE_COMMENT 
+        FROM information_schema.TABLES 
+        WHERE TABLE_SCHEMA = ?
+      `;
+      const tableParams: any[] = [databaseName];
 
-      // 批量获取所有表的索引信息
-      const [allIndexes] = await this.connection.query(`
-        SELECT
-          TABLE_NAME,
-          INDEX_NAME,
-          COLUMN_NAME,
-          NON_UNIQUE,
-          SEQ_IN_INDEX
-        FROM INFORMATION_SCHEMA.STATISTICS
-        WHERE TABLE_SCHEMA = DATABASE()
-        ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX
-      `) as [mysql.RowDataPacket[], mysql.FieldPacket[]];
+      if (tableNames && tableNames.length > 0) {
+        tableQuery += ` AND TABLE_NAME IN (?)`;
+        tableParams.push(tableNames);
+      }
 
-      // 批量获取所有表的行数估算
-      const [allStats] = await this.connection.query(`
-        SELECT
-          TABLE_NAME,
-          TABLE_ROWS
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_TYPE = 'BASE TABLE'
-      `) as [mysql.RowDataPacket[], mysql.FieldPacket[]];
+      const [tableRows] = await this.connection.query(
+        tableQuery,
+        tableParams
+      ) as [mysql.RowDataPacket[], mysql.FieldPacket[]];
 
-      // 在内存中组装数据
-      return this.assembleSchema(databaseName, version, allColumns, allIndexes, allStats);
+      // 初始化表映射
+      const tableMap = new Map<string, TableInfo>();
+      for (const row of tableRows) {
+        tableMap.set(row.TABLE_NAME, {
+          name: row.TABLE_NAME,
+          columns: [],
+          primaryKeys: [],
+          indexes: [],
+          estimatedRows: row.TABLE_ROWS || 0,
+        });
+      }
+
+      // 如果指定了表名但没有找到任何表，直接返回
+      if (tableMap.size === 0) {
+        return {
+          databaseType: 'mysql',
+          databaseName,
+          tables: [],
+          version,
+        };
+      }
+
+      // 3. 批量获取列信息
+      let columnQuery = `
+        SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_COMMENT, COLUMN_KEY, EXTRA 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = ? 
+      `;
+      const columnParams: any[] = [databaseName];
+
+      if (tableNames && tableNames.length > 0) {
+        columnQuery += ` AND TABLE_NAME IN (?)`;
+        columnParams.push(tableNames);
+      }
+
+      columnQuery += ` ORDER BY TABLE_NAME, ORDINAL_POSITION`;
+
+      const [columnRows] = await this.connection.query(
+        columnQuery,
+        columnParams
+      ) as [mysql.RowDataPacket[], mysql.FieldPacket[]];
+
+      for (const col of columnRows) {
+        const table = tableMap.get(col.TABLE_NAME);
+        if (table) {
+          // 添加列信息
+          table.columns.push({
+            name: col.COLUMN_NAME,
+            type: col.COLUMN_TYPE,
+            nullable: col.IS_NULLABLE === 'YES',
+            defaultValue: col.COLUMN_DEFAULT,
+            comment: col.COLUMN_COMMENT || undefined,
+          });
+
+          // 如果是主键，添加到主键列表
+          if (col.COLUMN_KEY === 'PRI') {
+            table.primaryKeys.push(col.COLUMN_NAME);
+          }
+        }
+      }
+
+      // 4. 批量获取索引信息
+      let indexQuery = `
+        SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX 
+        FROM information_schema.STATISTICS 
+        WHERE TABLE_SCHEMA = ? 
+      `;
+      const indexParams: any[] = [databaseName];
+
+      if (tableNames && tableNames.length > 0) {
+        indexQuery += ` AND TABLE_NAME IN (?)`;
+        indexParams.push(tableNames);
+      }
+
+      indexQuery += ` ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`;
+
+      const [indexRows] = await this.connection.query(
+        indexQuery,
+        indexParams
+      ) as [mysql.RowDataPacket[], mysql.FieldPacket[]];
+
+      // 临时存储索引构建过程： TableName -> IndexName -> IndexInfo
+      const tempIndexMap = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
+
+      for (const idx of indexRows) {
+        if (idx.INDEX_NAME === 'PRIMARY') continue;
+
+        const tableName = idx.TABLE_NAME;
+        const indexName = idx.INDEX_NAME;
+
+        if (!tableMap.has(tableName)) continue;
+
+        if (!tempIndexMap.has(tableName)) {
+          tempIndexMap.set(tableName, new Map());
+        }
+
+        const tableIndexes = tempIndexMap.get(tableName)!;
+
+        if (!tableIndexes.has(indexName)) {
+          tableIndexes.set(indexName, {
+            columns: [],
+            unique: idx.NON_UNIQUE === 0,
+          });
+        }
+
+        tableIndexes.get(indexName)!.columns.push(idx.COLUMN_NAME);
+      }
+
+      // 将构建好的索引填回 TableInfo
+      for (const [tableName, indexes] of tempIndexMap.entries()) {
+        const table = tableMap.get(tableName);
+        if (table) {
+          if (!table.indexes) {
+            table.indexes = [];
+          }
+          for (const [name, info] of indexes.entries()) {
+            table.indexes.push({
+              name,
+              columns: info.columns,
+              unique: info.unique,
+            });
+          }
+        }
+      }
+
+      // 按表名排序
+      const tableInfos = Array.from(tableMap.values());
+      tableInfos.sort((a, b) => a.name.localeCompare(b.name));
+
+      return {
+        databaseType: 'mysql',
+        databaseName,
+        tables: tableInfos,
+        version,
+      };
+
     } catch (error) {
       throw new Error(
         `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-  }
-
-  /**
-   * 组装 Schema 信息
-   */
-  private assembleSchema(
-    databaseName: string,
-    version: string,
-    allColumns: mysql.RowDataPacket[],
-    allIndexes: mysql.RowDataPacket[],
-    allStats: mysql.RowDataPacket[]
-  ): SchemaInfo {
-    // 按表名分组列信息
-    const columnsByTable = new Map<string, ColumnInfo[]>();
-    const primaryKeysByTable = new Map<string, string[]>();
-
-    for (const col of allColumns) {
-      const tableName = col.TABLE_NAME;
-
-      if (!columnsByTable.has(tableName)) {
-        columnsByTable.set(tableName, []);
-        primaryKeysByTable.set(tableName, []);
-      }
-
-      columnsByTable.get(tableName)!.push({
-        name: col.COLUMN_NAME,
-        type: col.COLUMN_TYPE,
-        nullable: col.IS_NULLABLE === 'YES',
-        defaultValue: col.COLUMN_DEFAULT,
-        comment: col.COLUMN_COMMENT || undefined,
-      });
-
-      // 收集主键
-      if (col.COLUMN_KEY === 'PRI') {
-        primaryKeysByTable.get(tableName)!.push(col.COLUMN_NAME);
-      }
-    }
-
-    // 按表名分组索引信息
-    const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
-
-    for (const idx of allIndexes) {
-      const tableName = idx.TABLE_NAME;
-      const indexName = idx.INDEX_NAME;
-
-      if (indexName === 'PRIMARY') continue; // 跳过主键索引
-
-      if (!indexesByTable.has(tableName)) {
-        indexesByTable.set(tableName, new Map());
-      }
-
-      const tableIndexes = indexesByTable.get(tableName)!;
-
-      if (!tableIndexes.has(indexName)) {
-        tableIndexes.set(indexName, {
-          columns: [],
-          unique: idx.NON_UNIQUE === 0,
-        });
-      }
-
-      tableIndexes.get(indexName)!.columns.push(idx.COLUMN_NAME);
-    }
-
-    // 按表名分组行数统计
-    const rowsByTable = new Map<string, number>();
-    for (const stat of allStats) {
-      rowsByTable.set(stat.TABLE_NAME, stat.TABLE_ROWS || 0);
-    }
-
-    // 组装表信息
-    const tableInfos: TableInfo[] = [];
-
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableIndexes = indexesByTable.get(tableName);
-      const indexInfos: IndexInfo[] = [];
-
-      if (tableIndexes) {
-        for (const [indexName, indexData] of tableIndexes.entries()) {
-          indexInfos.push({
-            name: indexName,
-            columns: indexData.columns,
-            unique: indexData.unique,
-          });
-        }
-      }
-
-      tableInfos.push({
-        name: tableName,
-        columns,
-        primaryKeys: primaryKeysByTable.get(tableName) || [],
-        indexes: indexInfos,
-        estimatedRows: rowsByTable.get(tableName) || 0,
-      });
-    }
-
-    // 按表名排序
-    tableInfos.sort((a, b) => a.name.localeCompare(b.name));
-
-    return {
-      databaseType: 'mysql',
-      databaseName,
-      tables: tableInfos,
-      version,
-    };
   }
 
   /**

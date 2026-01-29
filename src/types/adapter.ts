@@ -25,9 +25,10 @@ export interface DbAdapter {
 
   /**
    * 获取数据库结构信息
+   * @param tableNames - 可选，指定要获取的表名列表。如果不传，则获取所有表。
    * @returns 数据库的表结构、索引等元数据
    */
-  getSchema(): Promise<SchemaInfo>;
+  getSchema(tableNames?: string[]): Promise<SchemaInfo>;
 
   /**
    * 检查查询是否为写操作
