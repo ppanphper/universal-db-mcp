@@ -1,10 +1,10 @@
 {
-  "name": "universal-db-mcp",
+  "name": "universal-db-mcp-plus",
   "version": "1.0.0-plus",
   "description": "MCP 数据库万能连接器 (增强版) - 支持多库切换、SSH 隧道与国产数据库",
   "main": "dist/index.js",
   "bin": {
-    "universal-db-mcp": "dist/index.js"
+    "universal-db-mcp-plus": "dist/index.js"
   },
   "type": "module",
   "scripts": {
