@@ -177,8 +177,11 @@ export class DMAdapter implements DbAdapter {
   /**
    * 获取数据库结构信息（批量查询优化版本）
    *
-   * 达梦数据库中 USER_* 视图只显示当前用户 schema 下的对象，
-   * 如果连接的 database 与登录用户不同，需要使用 ALL_* 视图并指定 schema。
+   * 达梦数据库兼容多种查询方式，按优先级尝试：
+   * 1. 使用 DBA_* 视图（需要 DBA 权限）
+   * 2. 使用 ALL_* 视图（需要查询权限）
+   * 3. 使用 USER_* 视图（当前用户的对象）
+   * 4. 使用系统表 SYS* （最底层）
    */
   async getSchema(): Promise<SchemaInfo> {
     if (!this.connection) {
@@ -195,66 +198,207 @@ export class DMAdapter implements DbAdapter {
         ? this.getFirstValue(versionResult.rows[0]) as string
         : 'unknown';
 
-      // 获取当前用户
-      const userResult = await this.connection.execute('SELECT USER FROM DUAL', []);
-      const currentUser = userResult.rows?.[0]
-        ? this.getFirstValue(userResult.rows[0]) as string
-        : '';
-
-      // 确定要查询的 schema：优先使用配置的 database，否则使用当前用户
-      const schemaName = (this.config.database || currentUser || '').toUpperCase();
+      // 确定要查询的 schema 名称
+      const schemaName = (this.config.database || '').toUpperCase();
       const databaseName = schemaName || 'unknown';
 
-      // 使用 ALL_* 视图并指定 OWNER，这样可以查询指定 schema 的对象
-      // 批量获取所有表的列信息
-      const allColumnsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
-                DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
-         FROM ALL_TAB_COLUMNS
-         WHERE OWNER = :1
-         ORDER BY TABLE_NAME, COLUMN_ID`,
-        [schemaName]
-      );
+      // 尝试多种方式获取表信息
+      let allColumnsResult: any = { rows: [] };
+      let allCommentsResult: any = { rows: [] };
+      let allPrimaryKeysResult: any = { rows: [] };
+      let allIndexesResult: any = { rows: [] };
+      let allStatsResult: any = { rows: [] };
 
-      // 批量获取所有列注释
-      const allCommentsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
-         FROM ALL_COL_COMMENTS
-         WHERE OWNER = :1
-           AND COMMENTS IS NOT NULL`,
-        [schemaName]
-      );
+      // 方式1: 尝试使用 DBA_TAB_COLUMNS（需要 DBA 权限）
+      try {
+        allColumnsResult = await this.connection.execute(
+          `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+                  DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
+           FROM DBA_TAB_COLUMNS
+           WHERE OWNER = '${schemaName}'
+           ORDER BY TABLE_NAME, COLUMN_ID`,
+          []
+        );
 
-      // 批量获取所有主键信息
-      const allPrimaryKeysResult = await this.connection.execute(
-        `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
-         FROM ALL_CONSTRAINTS cons
-         JOIN ALL_CONS_COLUMNS cols
-           ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
-           AND cons.OWNER = cols.OWNER
-         WHERE cons.CONSTRAINT_TYPE = 'P'
-           AND cons.OWNER = :1
-         ORDER BY cons.TABLE_NAME, cols.POSITION`,
-        [schemaName]
-      );
+        if (allColumnsResult.rows && allColumnsResult.rows.length > 0) {
+          // DBA 视图可用，继续使用 DBA 视图获取其他信息
+          allCommentsResult = await this.connection.execute(
+            `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
+             FROM DBA_COL_COMMENTS
+             WHERE OWNER = '${schemaName}'
+               AND COMMENTS IS NOT NULL`,
+            []
+          );
 
-      // 批量获取所有索引信息
-      const allIndexesResult = await this.connection.execute(
-        `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
-         FROM ALL_INDEXES i
-         JOIN ALL_IND_COLUMNS ic
-           ON i.INDEX_NAME = ic.INDEX_NAME
-           AND i.OWNER = ic.INDEX_OWNER
-         WHERE i.OWNER = :1
-         ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
-        [schemaName]
-      );
+          allPrimaryKeysResult = await this.connection.execute(
+            `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
+             FROM DBA_CONSTRAINTS cons
+             JOIN DBA_CONS_COLUMNS cols
+               ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
+               AND cons.OWNER = cols.OWNER
+             WHERE cons.CONSTRAINT_TYPE = 'P'
+               AND cons.OWNER = '${schemaName}'
+             ORDER BY cons.TABLE_NAME, cols.POSITION`,
+            []
+          );
 
-      // 批量获取所有表的行数估算
-      const allStatsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, NUM_ROWS FROM ALL_TABLES WHERE OWNER = :1`,
-        [schemaName]
-      );
+          allIndexesResult = await this.connection.execute(
+            `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+             FROM DBA_INDEXES i
+             JOIN DBA_IND_COLUMNS ic
+               ON i.INDEX_NAME = ic.INDEX_NAME
+               AND i.OWNER = ic.INDEX_OWNER
+             WHERE i.OWNER = '${schemaName}'
+             ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
+            []
+          );
+
+          allStatsResult = await this.connection.execute(
+            `SELECT TABLE_NAME, NUM_ROWS FROM DBA_TABLES WHERE OWNER = '${schemaName}'`,
+            []
+          );
+        }
+      } catch (e) {
+        // DBA 视图不可用，尝试其他方式
+      }
+
+      // 方式2: 如果 DBA 视图没有数据，尝试 ALL_* 视图
+      if (!allColumnsResult.rows || allColumnsResult.rows.length === 0) {
+        try {
+          allColumnsResult = await this.connection.execute(
+            `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+                    DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
+             FROM ALL_TAB_COLUMNS
+             WHERE OWNER = '${schemaName}'
+             ORDER BY TABLE_NAME, COLUMN_ID`,
+            []
+          );
+
+          if (allColumnsResult.rows && allColumnsResult.rows.length > 0) {
+            allCommentsResult = await this.connection.execute(
+              `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
+               FROM ALL_COL_COMMENTS
+               WHERE OWNER = '${schemaName}'
+                 AND COMMENTS IS NOT NULL`,
+              []
+            );
+
+            allPrimaryKeysResult = await this.connection.execute(
+              `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
+               FROM ALL_CONSTRAINTS cons
+               JOIN ALL_CONS_COLUMNS cols
+                 ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
+                 AND cons.OWNER = cols.OWNER
+               WHERE cons.CONSTRAINT_TYPE = 'P'
+                 AND cons.OWNER = '${schemaName}'
+               ORDER BY cons.TABLE_NAME, cols.POSITION`,
+              []
+            );
+
+            allIndexesResult = await this.connection.execute(
+              `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+               FROM ALL_INDEXES i
+               JOIN ALL_IND_COLUMNS ic
+                 ON i.INDEX_NAME = ic.INDEX_NAME
+                 AND i.OWNER = ic.INDEX_OWNER
+               WHERE i.OWNER = '${schemaName}'
+               ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
+              []
+            );
+
+            allStatsResult = await this.connection.execute(
+              `SELECT TABLE_NAME, NUM_ROWS FROM ALL_TABLES WHERE OWNER = '${schemaName}'`,
+              []
+            );
+          }
+        } catch (e) {
+          // ALL 视图不可用，尝试其他方式
+        }
+      }
+
+      // 方式3: 如果 ALL 视图没有数据，尝试 USER_* 视图（当前用户的对象）
+      if (!allColumnsResult.rows || allColumnsResult.rows.length === 0) {
+        try {
+          allColumnsResult = await this.connection.execute(
+            `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+                    DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
+             FROM USER_TAB_COLUMNS
+             ORDER BY TABLE_NAME, COLUMN_ID`,
+            []
+          );
+
+          if (allColumnsResult.rows && allColumnsResult.rows.length > 0) {
+            allCommentsResult = await this.connection.execute(
+              `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
+               FROM USER_COL_COMMENTS
+               WHERE COMMENTS IS NOT NULL`,
+              []
+            );
+
+            allPrimaryKeysResult = await this.connection.execute(
+              `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
+               FROM USER_CONSTRAINTS cons
+               JOIN USER_CONS_COLUMNS cols
+                 ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
+               WHERE cons.CONSTRAINT_TYPE = 'P'
+               ORDER BY cons.TABLE_NAME, cols.POSITION`,
+              []
+            );
+
+            allIndexesResult = await this.connection.execute(
+              `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+               FROM USER_INDEXES i
+               JOIN USER_IND_COLUMNS ic
+                 ON i.INDEX_NAME = ic.INDEX_NAME
+               ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
+              []
+            );
+
+            allStatsResult = await this.connection.execute(
+              `SELECT TABLE_NAME, NUM_ROWS FROM USER_TABLES`,
+              []
+            );
+          }
+        } catch (e) {
+          // USER 视图不可用，尝试系统表
+        }
+      }
+
+      // 方式4: 如果以上都没有数据，使用达梦系统表
+      if (!allColumnsResult.rows || allColumnsResult.rows.length === 0) {
+        allColumnsResult = await this.connection.execute(
+          `SELECT
+             o.NAME AS TABLE_NAME,
+             c.NAME AS COLUMN_NAME,
+             c.TYPE$ AS DATA_TYPE,
+             c.LENGTH$ AS DATA_LENGTH,
+             c.SCALE AS DATA_SCALE,
+             CASE WHEN c.NULLABLE$ = 'Y' THEN 'Y' ELSE 'N' END AS NULLABLE,
+             c.DEFVAL AS DATA_DEFAULT,
+             c.COLID AS COLUMN_ID
+           FROM SYSCOLUMNS c
+           JOIN SYSOBJECTS o ON c.ID = o.ID
+           JOIN SYSSCHEMAS s ON o.SCHID = s.ID
+           WHERE s.NAME = '${schemaName}'
+             AND o.SUBTYPE$ = 'UTAB'
+           ORDER BY o.NAME, c.COLID`,
+          []
+        );
+
+        // 系统表的其他查询...
+        try {
+          allStatsResult = await this.connection.execute(
+            `SELECT o.NAME AS TABLE_NAME, 0 AS NUM_ROWS
+             FROM SYSOBJECTS o
+             JOIN SYSSCHEMAS s ON o.SCHID = s.ID
+             WHERE s.NAME = '${schemaName}'
+               AND o.SUBTYPE$ = 'UTAB'`,
+            []
+          );
+        } catch (e) {
+          // 忽略错误
+        }
+      }
 
       // 规范化所有结果的列名为大写（dmdb 驱动可能返回小写列名）
       const normalizeRows = (rows: any[]): any[] => {
@@ -326,15 +470,14 @@ export class DMAdapter implements DbAdapter {
       }
 
       columnsByTable.get(tableName)!.push({
-        name: columnName.toLowerCase(),
+        name: String(columnName).toLowerCase(),
         type: this.formatDMType(
           col.DATA_TYPE,
           col.DATA_LENGTH,
-          col.DATA_PRECISION,
           col.DATA_SCALE
         ),
         nullable: col.NULLABLE === 'Y',
-        defaultValue: col.DATA_DEFAULT?.trim() || undefined,
+        defaultValue: col.DATA_DEFAULT ? String(col.DATA_DEFAULT).trim() : undefined,
       });
     }
 
@@ -354,8 +497,8 @@ export class DMAdapter implements DbAdapter {
         commentsByTable.set(tableName, new Map());
       }
       commentsByTable.get(tableName)!.set(
-        columnName.toLowerCase(),
-        comments
+        String(columnName).toLowerCase(),
+        String(comments)
       );
     }
 
@@ -385,7 +528,7 @@ export class DMAdapter implements DbAdapter {
       if (!primaryKeysByTable.has(tableName)) {
         primaryKeysByTable.set(tableName, []);
       }
-      primaryKeysByTable.get(tableName)!.push(columnName.toLowerCase());
+      primaryKeysByTable.get(tableName)!.push(String(columnName).toLowerCase());
     }
 
     // 按表名分组索引信息
@@ -401,8 +544,9 @@ export class DMAdapter implements DbAdapter {
         continue;
       }
 
-      // 跳过主键索引
-      if (indexName.includes('PK_') || indexName.includes('SYS_')) {
+      // 跳过主键索引和系统索引
+      const idxNameStr = String(indexName);
+      if (idxNameStr.includes('PK_') || idxNameStr.startsWith('INDEX') || idxNameStr.includes('SYS_')) {
         continue;
       }
 
@@ -419,7 +563,7 @@ export class DMAdapter implements DbAdapter {
         });
       }
 
-      tableIndexes.get(indexName)!.columns.push(columnName.toLowerCase());
+      tableIndexes.get(indexName)!.columns.push(String(columnName).toLowerCase());
     }
 
     // 按表名分组行数统计
@@ -427,11 +571,11 @@ export class DMAdapter implements DbAdapter {
     for (const stat of allStats) {
       const tableName = stat.TABLE_NAME;
       if (tableName) {
-        rowsByTable.set(tableName, stat.NUM_ROWS || 0);
+        rowsByTable.set(tableName, Number(stat.NUM_ROWS) || 0);
       }
     }
 
-    // 组装表信息（基于列信息构建，不依赖 USER_TABLES 的结果）
+    // 组装表信息
     const tableInfos: TableInfo[] = [];
 
     for (const [tableName, columns] of columnsByTable.entries()) {
@@ -449,7 +593,7 @@ export class DMAdapter implements DbAdapter {
       }
 
       tableInfos.push({
-        name: tableName.toLowerCase(),
+        name: String(tableName).toLowerCase(),
         columns,
         primaryKeys: primaryKeysByTable.get(tableName) || [],
         indexes: indexInfos,
@@ -472,44 +616,70 @@ export class DMAdapter implements DbAdapter {
    * 格式化达梦数据类型
    */
   private formatDMType(
-    dataType: string | undefined | null,
+    dataType: string | number | undefined | null,
     length?: number,
-    precision?: number,
     scale?: number
   ): string {
     // 处理空值
-    if (!dataType) {
+    if (dataType === null || dataType === undefined) {
       return 'UNKNOWN';
     }
 
-    switch (dataType) {
+    // 达梦的 TYPE$ 可能是数字类型代码，需要转换
+    const typeMap: Record<number, string> = {
+      0: 'CHAR',
+      1: 'VARCHAR',
+      2: 'VARCHAR2',
+      3: 'BIT',
+      4: 'TINYINT',
+      5: 'SMALLINT',
+      6: 'INT',
+      7: 'BIGINT',
+      8: 'DECIMAL',
+      9: 'FLOAT',
+      10: 'DOUBLE',
+      11: 'BLOB',
+      12: 'DATE',
+      13: 'TIME',
+      14: 'DATETIME',
+      15: 'TIMESTAMP',
+      17: 'BINARY',
+      18: 'VARBINARY',
+      19: 'CLOB',
+      21: 'TEXT',
+      22: 'IMAGE',
+      23: 'BFILE',
+    };
+
+    let typeName: string;
+    if (typeof dataType === 'number') {
+      typeName = typeMap[dataType] || `TYPE_${dataType}`;
+    } else {
+      typeName = String(dataType);
+    }
+
+    // 添加长度/精度信息
+    switch (typeName) {
+      case 'DECIMAL':
       case 'NUMBER':
       case 'NUMERIC':
-      case 'DECIMAL':
-        if (precision !== null && precision !== undefined) {
-          if (scale !== null && scale !== undefined && scale > 0) {
-            return `${dataType}(${precision},${scale})`;
-          }
-          return `${dataType}(${precision})`;
+        if (length && scale && scale > 0) {
+          return `${typeName}(${length},${scale})`;
+        } else if (length) {
+          return `${typeName}(${length})`;
         }
-        return dataType;
+        return typeName;
 
       case 'VARCHAR':
       case 'VARCHAR2':
       case 'CHAR':
         if (length) {
-          return `${dataType}(${length})`;
+          return `${typeName}(${length})`;
         }
-        return dataType;
-
-      case 'TIMESTAMP':
-        if (scale !== null && scale !== undefined) {
-          return `TIMESTAMP(${scale})`;
-        }
-        return 'TIMESTAMP';
+        return typeName;
 
       default:
-        return dataType;
+        return typeName;
     }
   }
 
