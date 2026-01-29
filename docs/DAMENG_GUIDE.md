@@ -2,14 +2,14 @@
 
 ## 简介
 
-universal-db-mcp 现已支持达梦数据库（DM7/DM8）！达梦数据库驱动 `dmdb` 会作为可选依赖自动安装。
+universal-db-mcp-plus 现已支持达梦数据库（DM7/DM8）！达梦数据库驱动 `dmdb` 会作为可选依赖自动安装。
 
 ## 安装
 
 ### 方法 1: 全局安装（推荐）
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 ```
 
 达梦驱动 `dmdb` 会自动尝试安装。如果安装失败，请手动安装：
@@ -24,7 +24,7 @@ npm install -g dmdb
 mkdir my-db-project
 cd my-db-project
 npm init -y
-npm install universal-db-mcp
+npm install universal-db-mcp-plus
 ```
 
 ## Claude Desktop 配置
@@ -41,7 +41,7 @@ npm install universal-db-mcp
     "dm-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "dm",
         "--host", "localhost",
         "--port", "5236",
@@ -62,7 +62,7 @@ npm install universal-db-mcp
     "dm-prod": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "dm",
         "--host", "dm-server.example.com",
         "--port", "5236",
@@ -83,7 +83,7 @@ npm install universal-db-mcp
     "dm-dev": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "dm",
         "--host", "localhost",
         "--port", "5236",
@@ -206,5 +206,5 @@ npm install -g dmdb
 
 - 查看 [README.md](./README.md) 了解项目概述
 - 查看 [EXAMPLES.md](./EXAMPLES.md) 了解更多使用示例
-- 提交 Issue: https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- 提交 Issue: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 - 达梦官网: https://www.dameng.com/

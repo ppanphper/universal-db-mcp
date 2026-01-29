@@ -2,7 +2,7 @@
 
 ## 简介
 
-universal-db-mcp 现已支持 Microsoft SQL Server（2012+）和 Azure SQL Database！使用 `mssql` 驱动提供完整的 SQL Server 功能支持。
+universal-db-mcp-plus 现已支持 Microsoft SQL Server（2012+）和 Azure SQL Database！使用 `mssql` 驱动提供完整的 SQL Server 功能支持。
 
 ### 支持的版本
 
@@ -15,7 +15,7 @@ universal-db-mcp 现已支持 Microsoft SQL Server（2012+）和 Azure SQL Datab
 ### 方法 1: 全局安装（推荐）
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 ```
 
 SQL Server 驱动 `mssql` 会自动安装。
@@ -26,7 +26,7 @@ SQL Server 驱动 `mssql` 会自动安装。
 mkdir my-db-project
 cd my-db-project
 npm init -y
-npm install universal-db-mcp
+npm install universal-db-mcp-plus
 ```
 
 ## Claude Desktop 配置
@@ -46,7 +46,7 @@ npm install universal-db-mcp
     "sqlserver-local": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlserver",
         "--host", "localhost",
         "--port", "1433",
@@ -69,7 +69,7 @@ npm install universal-db-mcp
     "azure-sql": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlserver",
         "--host", "myserver.database.windows.net",
         "--port", "1433",
@@ -92,7 +92,7 @@ npm install universal-db-mcp
     "sqlserver-prod": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlserver",
         "--host", "sql-server.example.com",
         "--port", "1433",
@@ -113,7 +113,7 @@ npm install universal-db-mcp
     "sqlserver-dev": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlserver",
         "--host", "localhost",
         "--port", "1433",
@@ -414,7 +414,7 @@ mycompany-sql.database.windows.net
 - 查看 [README.md](../README.md) 了解项目概述
 - 查看 [EXAMPLES.md](../EXAMPLES.md) 了解更多使用示例
 - 查看 [CONTRIBUTING.md](../CONTRIBUTING.md) 了解如何贡献
-- 提交 Issue: https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- 提交 Issue: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 
 ## 相关资源
 

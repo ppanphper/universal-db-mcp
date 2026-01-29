@@ -6,7 +6,7 @@
 - ✅ package.json 配置完整
 - ✅ LICENSE 文件已创建
 - ✅ .npmignore 文件已创建
-- ✅ 包名 `universal-db-mcp` 可用
+- ✅ 包名 `universal-db-mcp-plus` 可用
 - ✅ 本地打包测试成功（25.6 kB）
 
 ## 📝 发布流程
@@ -51,10 +51,10 @@ npm publish
 
 ```bash
 # 查看包信息
-npm view universal-db-mcp
+npm view universal-db-mcp-plus
 
 # 测试安装
-npx universal-db-mcp@latest --help
+npx universal-db-mcp-plus@latest --help
 ```
 
 ## 🎉 发布成功后
@@ -63,15 +63,15 @@ npx universal-db-mcp@latest --help
 
 ```bash
 # 全局安装
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 
 # 或直接使用 npx
-npx universal-db-mcp --type mysql --host localhost --port 3306 ...
+npx universal-db-mcp-plus --type mysql --host localhost --port 3306 ...
 ```
 
 ## 📦 包信息
 
-- **包名**: universal-db-mcp
+- **包名**: universal-db-mcp-plus
 - **版本**: 0.1.0
 - **大小**: 25.6 kB (压缩后)
 - **解压后**: 97.8 kB
@@ -107,8 +107,8 @@ npm publish
    - 主版本号.次版本号.修订号
 
 3. **撤销发布**
-   - 发布后 72 小时内可以撤销：`npm unpublish universal-db-mcp@0.1.0`
-   - 超过 72 小时只能废弃：`npm deprecate universal-db-mcp@0.1.0 "版本已废弃"`
+   - 发布后 72 小时内可以撤销：`npm unpublish universal-db-mcp-plus@0.1.0`
+   - 超过 72 小时只能废弃：`npm deprecate universal-db-mcp-plus@0.1.0 "版本已废弃"`
 
 ## 📊 发布后的推广
 
@@ -128,6 +128,6 @@ npm publish
 
 ## 🔗 相关链接
 
-- NPM 包页面: https://www.npmjs.com/package/universal-db-mcp
-- GitHub 仓库: https://github.com/universal-db-mcp/universal-db-mcp
-- 问题反馈: https://github.com/universal-db-mcp/universal-db-mcp/issues
+- NPM 包页面: https://www.npmjs.com/package/universal-db-mcp-plus
+- GitHub 仓库: https://github.com/universal-db-mcp-plus/universal-db-mcp-plus
+- 问题反馈: https://github.com/universal-db-mcp-plus/universal-db-mcp-plus/issues
