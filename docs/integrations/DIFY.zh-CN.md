@@ -20,13 +20,13 @@ Dify 是一个 LLM 应用开发平台。通过集成 Universal Database MCP Serv
 
 ```bash
 docker run -d \
-  --name universal-db-mcp \
+  --name universal-db-mcp-plus \
   -p 3000:3000 \
   -e MODE=http \
   -e HTTP_PORT=3000 \
   -e API_KEYS=dify-secret-key \
   -e CORS_ORIGINS=* \
-  universal-db-mcp:latest
+  universal-db-mcp-plus:latest
 ```
 
 ### 步骤 2: 创建 Dify 应用
@@ -608,5 +608,5 @@ while True:
 ## 支持
 
 如有集成问题：
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 - Dify 社区: https://discord.gg/dify

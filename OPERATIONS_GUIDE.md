@@ -5,7 +5,7 @@
 所有命令需要先进入项目目录：
 
 ```bash
-cd /opt/universal-db-mcp
+cd /opt/universal-db-mcp-plus
 ```
 
 ---
@@ -38,10 +38,10 @@ docker compose start
 docker compose ps
 
 # 查看所有容器（包括停止的）
-docker ps -a | grep universal-db-mcp
+docker ps -a | grep universal-db-mcp-plus
 
 # 查看资源占用（CPU、内存）
-docker stats universal-db-mcp
+docker stats universal-db-mcp-plus
 ```
 
 ---
@@ -64,7 +64,7 @@ docker compose logs --since 1h
 ## 🔧 更新版本
 
 ```bash
-cd /opt/universal-db-mcp
+cd /opt/universal-db-mcp-plus
 
 # 停止服务
 docker compose down
@@ -137,7 +137,7 @@ sudo systemctl enable docker
 编辑 `.env` 文件：
 
 ```bash
-nano /opt/universal-db-mcp/.env
+nano /opt/universal-db-mcp-plus/.env
 ```
 
 修改 `API_KEYS` 为您自己的安全密钥：
@@ -197,8 +197,8 @@ curl -X POST http://localhost:3001/api/query \
 docker compose logs
 
 # 检查配置文件
-cat /opt/universal-db-mcp/.env
-cat /opt/universal-db-mcp/docker-compose.yml
+cat /opt/universal-db-mcp-plus/.env
+cat /opt/universal-db-mcp-plus/docker-compose.yml
 ```
 
 ### 端口被占用

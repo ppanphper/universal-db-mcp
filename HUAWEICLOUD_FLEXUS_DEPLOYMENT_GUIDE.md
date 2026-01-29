@@ -152,8 +152,8 @@ docker compose version
 ### 3.1 创建项目目录
 
 ```bash
-mkdir -p /opt/universal-db-mcp
-cd /opt/universal-db-mcp
+mkdir -p /opt/universal-db-mcp-plus
+cd /opt/universal-db-mcp-plus
 mkdir -p logs config
 ```
 
@@ -192,8 +192,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# 安装 universal-db-mcp
-RUN npm install -g universal-db-mcp
+# 安装 universal-db-mcp-plus
+RUN npm install -g universal-db-mcp-plus
 
 # 设置环境变量
 ENV MODE=http
@@ -206,7 +206,7 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget -q --spider http://localhost:3001/api/health || exit 1
 
-CMD ["npx", "universal-db-mcp"]
+CMD ["npx", "universal-db-mcp-plus"]
 EOF
 ```
 
@@ -215,9 +215,9 @@ EOF
 ```bash
 cat > docker-compose.yml << 'EOF'
 services:
-  universal-db-mcp:
+  universal-db-mcp-plus:
     build: .
-    container_name: universal-db-mcp
+    container_name: universal-db-mcp-plus
     ports:
       - "3001:3001"
     env_file:
@@ -249,7 +249,7 @@ EOF
 ### 4.1 构建并启动
 
 ```bash
-cd /opt/universal-db-mcp
+cd /opt/universal-db-mcp-plus
 docker compose up -d --build
 ```
 
@@ -300,16 +300,16 @@ sudo netstat -tlnp | grep 3000
 
 ```bash
 # 修改 .env 文件中的端口
-sed -i 's/HTTP_PORT=3000/HTTP_PORT=3001/' /opt/universal-db-mcp/.env
+sed -i 's/HTTP_PORT=3000/HTTP_PORT=3001/' /opt/universal-db-mcp-plus/.env
 
 # 修改 docker-compose.yml 中的端口映射
-sed -i 's/3000:3000/3001:3001/' /opt/universal-db-mcp/docker-compose.yml
+sed -i 's/3000:3000/3001:3001/' /opt/universal-db-mcp-plus/docker-compose.yml
 ```
 
 **方法 2：直接覆盖 .env 文件**
 
 ```bash
-cat > /opt/universal-db-mcp/.env << 'EOF'
+cat > /opt/universal-db-mcp-plus/.env << 'EOF'
 MODE=http
 HTTP_PORT=3001
 HTTP_HOST=0.0.0.0
@@ -325,7 +325,7 @@ EOF
 ### 5.5 重启服务
 
 ```bash
-cd /opt/universal-db-mcp
+cd /opt/universal-db-mcp-plus
 docker compose down
 docker compose up -d
 ```
@@ -338,7 +338,7 @@ docker compose up -d
 
 ```bash
 # 进入项目目录
-cd /opt/universal-db-mcp
+cd /opt/universal-db-mcp-plus
 ```
 
 ### 6.2 启动 / 停止 / 重启
@@ -367,10 +367,10 @@ docker compose start
 docker compose ps
 
 # 查看所有容器（包括停止的）
-docker ps -a | grep universal-db-mcp
+docker ps -a | grep universal-db-mcp-plus
 
 # 查看资源占用（CPU、内存）
-docker stats universal-db-mcp
+docker stats universal-db-mcp-plus
 ```
 
 ### 6.4 查看日志
@@ -389,7 +389,7 @@ docker compose logs --since 1h
 ### 6.5 更新版本
 
 ```bash
-cd /opt/universal-db-mcp
+cd /opt/universal-db-mcp-plus
 
 # 停止服务
 docker compose down
@@ -605,7 +605,7 @@ ping mcp.yourdomain.com
 
 ```bash
 # 创建配置文件
-sudo tee /etc/nginx/sites-available/universal-db-mcp << 'EOF'
+sudo tee /etc/nginx/sites-available/universal-db-mcp-plus << 'EOF'
 server {
     listen 80;
     server_name mcp.yourdomain.com;  # 替换为您的域名
@@ -629,7 +629,7 @@ server {
 EOF
 
 # 启用配置
-sudo ln -s /etc/nginx/sites-available/universal-db-mcp /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/universal-db-mcp-plus /etc/nginx/sites-enabled/
 
 # 测试配置
 sudo nginx -t
@@ -752,7 +752,7 @@ nano /path/to/file
 ## 最终目录结构
 
 ```
-/opt/universal-db-mcp/
+/opt/universal-db-mcp-plus/
 ├── .env                    # 环境配置
 ├── docker-compose.yml      # Docker Compose 配置
 ├── Dockerfile              # Docker 镜像构建文件

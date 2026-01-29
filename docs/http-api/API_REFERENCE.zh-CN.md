@@ -131,7 +131,7 @@ curl http://localhost:3000/api/info
 {
   "success": true,
   "data": {
-    "name": "universal-db-mcp",
+    "name": "universal-db-mcp-plus",
     "version": "1.0.0",
     "mode": "http",
     "supportedDatabases": [
@@ -790,5 +790,5 @@ curl -X POST http://localhost:3000/api/disconnect \
 ## 支持
 
 如有问题和疑问：
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
-- 文档: https://github.com/Anarkh-Lee/universal-db-mcp#readme
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
+- 文档: https://github.com/Anarkh-Lee/universal-db-mcp-plus#readme

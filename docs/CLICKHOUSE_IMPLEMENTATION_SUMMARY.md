@@ -106,7 +106,7 @@
     "clickhouse-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "clickhouse",
         "--host", "localhost",
         "--port", "8123",
@@ -127,7 +127,7 @@
     "clickhouse-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--danger-allow-write",
         "--type", "clickhouse",
         "--host", "localhost",
@@ -149,7 +149,7 @@
     "clickhouse-cloud": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "clickhouse",
         "--host", "your-instance.clickhouse.cloud",
         "--port", "8443",
@@ -228,7 +228,7 @@
 
 ## 🎉 总结
 
-成功为 universal-db-mcp 项目添加了 ClickHouse 数据库支持，包括：
+成功为 universal-db-mcp-plus 项目添加了 ClickHouse 数据库支持，包括：
 - 完整的适配器实现
 - 详细的文档和示例
 - 与现有架构的无缝集成

@@ -61,7 +61,7 @@ echo   "mcpServers": {
 echo     "mysql-db": {
 echo       "command": "npx",
 echo       "args": [
-echo         "universal-db-mcp",
+echo         "universal-db-mcp-plus",
 echo         "--type", "mysql",
 echo         "--host", "%DB_HOST%",
 echo         "--port", "%DB_PORT%",
@@ -90,7 +90,7 @@ echo   "mcpServers": {
 echo     "postgres-db": {
 echo       "command": "npx",
 echo       "args": [
-echo         "universal-db-mcp",
+echo         "universal-db-mcp-plus",
 echo         "--type", "postgres",
 echo         "--host", "%DB_HOST%",
 echo         "--port", "%DB_PORT%",
@@ -119,7 +119,7 @@ if "%DB_PASS%"=="" (
     echo     "redis-cache": {
     echo       "command": "npx",
     echo       "args": [
-    echo         "universal-db-mcp",
+    echo         "universal-db-mcp-plus",
     echo         "--type", "redis",
     echo         "--host", "%DB_HOST%",
     echo         "--port", "%DB_PORT%"
@@ -136,7 +136,7 @@ if "%DB_PASS%"=="" (
     echo     "redis-cache": {
     echo       "command": "npx",
     echo       "args": [
-    echo         "universal-db-mcp",
+    echo         "universal-db-mcp-plus",
     echo         "--type", "redis",
     echo         "--host", "%DB_HOST%",
     echo         "--port", "%DB_PORT%",

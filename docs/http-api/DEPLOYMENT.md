@@ -24,10 +24,10 @@ This guide covers various deployment options for Universal Database MCP Server i
 
 ```bash
 # Global installation
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 
 # Or local installation
-npm install universal-db-mcp
+npm install universal-db-mcp-plus
 ```
 
 #### 2. Configure
@@ -52,7 +52,7 @@ LOG_LEVEL=info
 npm run start:http
 
 # If installed locally
-npx universal-db-mcp
+npx universal-db-mcp-plus
 ```
 
 #### 4. Verify
@@ -78,7 +78,7 @@ Create `ecosystem.config.js`:
 ```javascript
 module.exports = {
   apps: [{
-    name: 'universal-db-mcp',
+    name: 'universal-db-mcp-plus',
     script: 'dist/index.js',
     instances: 'max',
     exec_mode: 'cluster',
@@ -114,19 +114,19 @@ npm run build
 pm2 start ecosystem.config.js
 
 # View logs
-pm2 logs universal-db-mcp
+pm2 logs universal-db-mcp-plus
 
 # Monitor
 pm2 monit
 
 # Restart
-pm2 restart universal-db-mcp
+pm2 restart universal-db-mcp-plus
 
 # Stop
-pm2 stop universal-db-mcp
+pm2 stop universal-db-mcp-plus
 
 # Delete
-pm2 delete universal-db-mcp
+pm2 delete universal-db-mcp-plus
 ```
 
 #### 4. Auto-start on System Boot
@@ -141,7 +141,7 @@ pm2 save
 
 ### Option 3: systemd (Linux)
 
-Create `/etc/systemd/system/universal-db-mcp.service`:
+Create `/etc/systemd/system/universal-db-mcp-plus.service`:
 
 ```ini
 [Unit]
@@ -151,7 +151,7 @@ After=network.target
 [Service]
 Type=simple
 User=nodejs
-WorkingDirectory=/opt/universal-db-mcp
+WorkingDirectory=/opt/universal-db-mcp-plus
 Environment="NODE_ENV=production"
 Environment="MODE=http"
 Environment="HTTP_PORT=3000"
@@ -161,7 +161,7 @@ Restart=on-failure
 RestartSec=10
 StandardOutput=syslog
 StandardError=syslog
-SyslogIdentifier=universal-db-mcp
+SyslogIdentifier=universal-db-mcp-plus
 
 [Install]
 WantedBy=multi-user.target
@@ -171,9 +171,9 @@ Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable universal-db-mcp
-sudo systemctl start universal-db-mcp
-sudo systemctl status universal-db-mcp
+sudo systemctl enable universal-db-mcp-plus
+sudo systemctl start universal-db-mcp-plus
+sudo systemctl status universal-db-mcp-plus
 ```
 
 ## Docker Deployment
@@ -188,15 +188,15 @@ sudo systemctl status universal-db-mcp
 #### 1. Build Image
 
 ```bash
-cd /path/to/universal-db-mcp
-docker build -t universal-db-mcp:latest -f docker/Dockerfile .
+cd /path/to/universal-db-mcp-plus
+docker build -t universal-db-mcp-plus:latest -f docker/Dockerfile .
 ```
 
 #### 2. Run Container
 
 ```bash
 docker run -d \
-  --name universal-db-mcp \
+  --name universal-db-mcp-plus \
   -p 3000:3000 \
   -e MODE=http \
   -e HTTP_PORT=3000 \
@@ -205,20 +205,20 @@ docker run -d \
   -e RATE_LIMIT_MAX=100 \
   -e LOG_LEVEL=info \
   --restart unless-stopped \
-  universal-db-mcp:latest
+  universal-db-mcp-plus:latest
 ```
 
 #### 3. View Logs
 
 ```bash
-docker logs -f universal-db-mcp
+docker logs -f universal-db-mcp-plus
 ```
 
 #### 4. Stop/Remove
 
 ```bash
-docker stop universal-db-mcp
-docker rm universal-db-mcp
+docker stop universal-db-mcp-plus
+docker rm universal-db-mcp-plus
 ```
 
 ### Option 2: Docker Compose
@@ -354,7 +354,7 @@ npm install -g @alicloud/fun
 ROSTemplateFormatVersion: '2015-09-01'
 Transform: 'Aliyun::Serverless-2018-04-03'
 Resources:
-  universal-db-mcp:
+  universal-db-mcp-plus:
     Type: 'Aliyun::Serverless::Service'
     Properties:
       Description: 'Universal Database MCP Server'
@@ -419,10 +419,10 @@ npm install -g serverless
 
 ```yaml
 component: scf
-name: universal-db-mcp
+name: universal-db-mcp-plus
 
 inputs:
-  name: universal-db-mcp
+  name: universal-db-mcp-plus
   src: ./
   handler: index.handler
   runtime: Nodejs20.15
@@ -603,7 +603,7 @@ railway variables set API_KEYS=your-secret-key
 ```yaml
 services:
   - type: web
-    name: universal-db-mcp
+    name: universal-db-mcp-plus
     env: node
     buildCommand: npm install && npm run build
     startCommand: npm run start:http
@@ -636,7 +636,7 @@ curl -L https://fly.io/install.sh | sh
 #### 2. Create fly.toml
 
 ```toml
-app = "universal-db-mcp"
+app = "universal-db-mcp-plus"
 primary_region = "hkg"
 
 [build]
@@ -888,13 +888,13 @@ View logs based on deployment method:
 
 ```bash
 # PM2
-pm2 logs universal-db-mcp
+pm2 logs universal-db-mcp-plus
 
 # Docker
-docker logs -f universal-db-mcp
+docker logs -f universal-db-mcp-plus
 
 # systemd
-journalctl -u universal-db-mcp -f
+journalctl -u universal-db-mcp-plus -f
 
 # Railway
 railway logs
@@ -909,5 +909,5 @@ fly logs
 ## Support
 
 For deployment issues:
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
-- Documentation: https://github.com/Anarkh-Lee/universal-db-mcp#readme
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
+- Documentation: https://github.com/Anarkh-Lee/universal-db-mcp-plus#readme

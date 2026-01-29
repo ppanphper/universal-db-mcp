@@ -20,13 +20,13 @@ Deploy Universal Database MCP Server:
 
 ```bash
 docker run -d \
-  --name universal-db-mcp \
+  --name universal-db-mcp-plus \
   -p 3000:3000 \
   -e MODE=http \
   -e HTTP_PORT=3000 \
   -e API_KEYS=dify-secret-key \
   -e CORS_ORIGINS=* \
-  universal-db-mcp:latest
+  universal-db-mcp-plus:latest
 ```
 
 ### Step 2: Create Dify Application
@@ -608,5 +608,5 @@ while True:
 ## Support
 
 For integration issues:
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 - Dify Community: https://discord.gg/dify

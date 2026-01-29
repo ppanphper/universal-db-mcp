@@ -207,7 +207,7 @@ D:\Doc\Personal\test-new\mcp\
 ### MCP模式（Claude Desktop）
 ```bash
 # 安装
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 
 # 配置Claude Desktop
 # 编辑 claude_desktop_config.json
@@ -216,7 +216,7 @@ npm install -g universal-db-mcp
     "mysql-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "localhost",
         "--port", "3306",
@@ -248,13 +248,13 @@ curl http://localhost:3000/api/health
 #### Docker运行
 ```bash
 # 构建
-docker build -t universal-db-mcp -f docker/Dockerfile .
+docker build -t universal-db-mcp-plus -f docker/Dockerfile .
 
 # 运行
 docker run -p 3000:3000 \
   -e MODE=http \
   -e API_KEYS=your-key \
-  universal-db-mcp
+  universal-db-mcp-plus
 ```
 
 #### Docker Compose
@@ -392,8 +392,8 @@ curl -X POST http://localhost:3000/api/disconnect \
 
 ## 📞 支持
 
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
-- 文档: https://github.com/Anarkh-Lee/universal-db-mcp#readme
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
+- 文档: https://github.com/Anarkh-Lee/universal-db-mcp-plus#readme
 
 ---
 

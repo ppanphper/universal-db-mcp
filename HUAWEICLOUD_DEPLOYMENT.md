@@ -109,8 +109,8 @@ sudo chown $USER:$USER /opt/apps
 cd /opt/apps
 
 # 克隆项目
-git clone https://github.com/Anarkh-Lee/universal-db-mcp.git
-cd universal-db-mcp
+git clone https://github.com/Anarkh-Lee/universal-db-mcp-plus.git
+cd universal-db-mcp-plus
 ```
 
 ### 步骤 4：配置环境变量
@@ -181,11 +181,11 @@ vim docker-compose.prod.yml
 version: '3.8'
 
 services:
-  universal-db-mcp:
+  universal-db-mcp-plus:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: universal-db-mcp
+    container_name: universal-db-mcp-plus
     restart: always
     ports:
       - "127.0.0.1:3000:3000"  # 仅本地访问，通过 Nginx 代理
@@ -215,7 +215,7 @@ services:
 
 networks:
   default:
-    name: universal-db-mcp-network
+    name: universal-db-mcp-plus-network
 ```
 
 ### 步骤 6：构建并启动服务
@@ -282,8 +282,8 @@ sudo chown $USER:$USER /opt/apps
 cd /opt/apps
 
 # 克隆项目
-git clone https://github.com/Anarkh-Lee/universal-db-mcp.git
-cd universal-db-mcp
+git clone https://github.com/Anarkh-Lee/universal-db-mcp-plus.git
+cd universal-db-mcp-plus
 
 # 安装依赖
 npm ci
@@ -305,9 +305,9 @@ vim ecosystem.config.cjs
 ```javascript
 module.exports = {
   apps: [{
-    name: 'universal-db-mcp',
+    name: 'universal-db-mcp-plus',
     script: 'dist/index.js',
-    cwd: '/opt/apps/universal-db-mcp',
+    cwd: '/opt/apps/universal-db-mcp-plus',
     instances: 1,  // 单实例，如需集群可改为 'max' 或具体数字
     exec_mode: 'fork',
     env: {
@@ -316,8 +316,8 @@ module.exports = {
     },
     env_file: '.env',
     max_memory_restart: '500M',
-    error_file: '/var/log/universal-db-mcp/error.log',
-    out_file: '/var/log/universal-db-mcp/out.log',
+    error_file: '/var/log/universal-db-mcp-plus/error.log',
+    out_file: '/var/log/universal-db-mcp-plus/out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     merge_logs: true,
     autorestart: true,
@@ -332,8 +332,8 @@ module.exports = {
 
 ```bash
 # 创建日志目录
-sudo mkdir -p /var/log/universal-db-mcp
-sudo chown $USER:$USER /var/log/universal-db-mcp
+sudo mkdir -p /var/log/universal-db-mcp-plus
+sudo chown $USER:$USER /var/log/universal-db-mcp-plus
 
 # 启动服务
 pm2 start ecosystem.config.cjs
@@ -342,7 +342,7 @@ pm2 start ecosystem.config.cjs
 pm2 status
 
 # 查看日志
-pm2 logs universal-db-mcp
+pm2 logs universal-db-mcp-plus
 
 # 设置开机自启
 pm2 startup
@@ -353,16 +353,16 @@ pm2 save
 
 ```bash
 # 重启服务
-pm2 restart universal-db-mcp
+pm2 restart universal-db-mcp-plus
 
 # 停止服务
-pm2 stop universal-db-mcp
+pm2 stop universal-db-mcp-plus
 
 # 删除服务
-pm2 delete universal-db-mcp
+pm2 delete universal-db-mcp-plus
 
 # 查看详细信息
-pm2 show universal-db-mcp
+pm2 show universal-db-mcp-plus
 
 # 监控面板
 pm2 monit
@@ -391,8 +391,8 @@ sudo mkdir -p /opt/apps
 cd /opt/apps
 
 # 克隆项目
-sudo git clone https://github.com/Anarkh-Lee/universal-db-mcp.git
-cd universal-db-mcp
+sudo git clone https://github.com/Anarkh-Lee/universal-db-mcp-plus.git
+cd universal-db-mcp-plus
 
 # 安装依赖并构建
 sudo npm ci
@@ -407,29 +407,29 @@ sudo vim .env  # 按照上文配置
 
 ```bash
 # 创建专用用户（无登录权限）
-sudo useradd --system --no-create-home --shell /bin/false universal-db-mcp
+sudo useradd --system --no-create-home --shell /bin/false universal-db-mcp-plus
 
 # 设置目录权限
-sudo chown -R universal-db-mcp:universal-db-mcp /opt/apps/universal-db-mcp
+sudo chown -R universal-db-mcp-plus:universal-db-mcp-plus /opt/apps/universal-db-mcp-plus
 ```
 
 ### 步骤 4：创建 systemd 服务文件
 
 ```bash
-sudo vim /etc/systemd/system/universal-db-mcp.service
+sudo vim /etc/systemd/system/universal-db-mcp-plus.service
 ```
 
 ```ini
 [Unit]
 Description=Universal DB MCP Server
-Documentation=https://github.com/Anarkh-Lee/universal-db-mcp
+Documentation=https://github.com/Anarkh-Lee/universal-db-mcp-plus
 After=network.target
 
 [Service]
 Type=simple
-User=universal-db-mcp
-Group=universal-db-mcp
-WorkingDirectory=/opt/apps/universal-db-mcp
+User=universal-db-mcp-plus
+Group=universal-db-mcp-plus
+WorkingDirectory=/opt/apps/universal-db-mcp-plus
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=5
@@ -439,14 +439,14 @@ StartLimitBurst=3
 # 环境变量
 Environment=NODE_ENV=production
 Environment=MODE=http
-EnvironmentFile=/opt/apps/universal-db-mcp/.env
+EnvironmentFile=/opt/apps/universal-db-mcp-plus/.env
 
 # 安全加固
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/opt/apps/universal-db-mcp
+ReadWritePaths=/opt/apps/universal-db-mcp-plus
 
 # 资源限制
 MemoryMax=512M
@@ -455,7 +455,7 @@ CPUQuota=80%
 # 日志
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=universal-db-mcp
+SyslogIdentifier=universal-db-mcp-plus
 
 [Install]
 WantedBy=multi-user.target
@@ -468,32 +468,32 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 
 # 启动服务
-sudo systemctl start universal-db-mcp
+sudo systemctl start universal-db-mcp-plus
 
 # 设置开机自启
-sudo systemctl enable universal-db-mcp
+sudo systemctl enable universal-db-mcp-plus
 
 # 查看状态
-sudo systemctl status universal-db-mcp
+sudo systemctl status universal-db-mcp-plus
 
 # 查看日志
-sudo journalctl -u universal-db-mcp -f
+sudo journalctl -u universal-db-mcp-plus -f
 ```
 
 ### systemd 常用命令
 
 ```bash
 # 重启服务
-sudo systemctl restart universal-db-mcp
+sudo systemctl restart universal-db-mcp-plus
 
 # 停止服务
-sudo systemctl stop universal-db-mcp
+sudo systemctl stop universal-db-mcp-plus
 
 # 禁用开机自启
-sudo systemctl disable universal-db-mcp
+sudo systemctl disable universal-db-mcp-plus
 
 # 查看最近日志
-sudo journalctl -u universal-db-mcp --since "1 hour ago"
+sudo journalctl -u universal-db-mcp-plus --since "1 hour ago"
 ```
 
 ---
@@ -571,7 +571,7 @@ sudo systemctl enable nginx
 ### 步骤 2：创建 Nginx 配置
 
 ```bash
-sudo vim /etc/nginx/sites-available/universal-db-mcp
+sudo vim /etc/nginx/sites-available/universal-db-mcp-plus
 ```
 
 ```nginx
@@ -608,8 +608,8 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # 日志
-    access_log /var/log/nginx/universal-db-mcp.access.log;
-    error_log /var/log/nginx/universal-db-mcp.error.log;
+    access_log /var/log/nginx/universal-db-mcp-plus.access.log;
+    error_log /var/log/nginx/universal-db-mcp-plus.error.log;
 
     # 请求体大小限制
     client_max_body_size 10M;
@@ -640,7 +640,7 @@ server {
 
     # 根路径返回服务信息
     location = / {
-        return 200 '{"service":"universal-db-mcp","status":"running"}';
+        return 200 '{"service":"universal-db-mcp-plus","status":"running"}';
         add_header Content-Type application/json;
     }
 
@@ -655,7 +655,7 @@ server {
 
 ```bash
 # 创建软链接
-sudo ln -s /etc/nginx/sites-available/universal-db-mcp /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/universal-db-mcp-plus /etc/nginx/sites-enabled/
 
 # 删除默认配置（可选）
 sudo rm /etc/nginx/sites-enabled/default
@@ -710,20 +710,20 @@ docker compose -f docker-compose.prod.yml logs --tail 100
 **PM2 部署**：
 ```bash
 # 实时日志
-pm2 logs universal-db-mcp
+pm2 logs universal-db-mcp-plus
 
 # 日志文件位置
-cat /var/log/universal-db-mcp/out.log
-cat /var/log/universal-db-mcp/error.log
+cat /var/log/universal-db-mcp-plus/out.log
+cat /var/log/universal-db-mcp-plus/error.log
 ```
 
 **systemd 部署**：
 ```bash
 # 实时日志
-sudo journalctl -u universal-db-mcp -f
+sudo journalctl -u universal-db-mcp-plus -f
 
 # 最近 1 小时
-sudo journalctl -u universal-db-mcp --since "1 hour ago"
+sudo journalctl -u universal-db-mcp-plus --since "1 hour ago"
 ```
 
 ### 2. 健康检查脚本
@@ -766,7 +766,7 @@ crontab -e
 sudo apt install -y htop
 
 # 查看 Docker 容器资源使用
-docker stats universal-db-mcp
+docker stats universal-db-mcp-plus
 
 # 查看系统资源
 htop
@@ -843,7 +843,7 @@ docker compose -f docker-compose.prod.yml build --no-cache
 
 **Docker 部署**：
 ```bash
-cd /opt/apps/universal-db-mcp
+cd /opt/apps/universal-db-mcp-plus
 
 # 拉取最新代码
 git pull origin main
@@ -855,7 +855,7 @@ docker compose -f docker-compose.prod.yml up -d
 
 **PM2 部署**：
 ```bash
-cd /opt/apps/universal-db-mcp
+cd /opt/apps/universal-db-mcp-plus
 
 # 拉取最新代码
 git pull origin main
@@ -865,15 +865,15 @@ npm ci
 npm run build
 
 # 重启服务
-pm2 restart universal-db-mcp
+pm2 restart universal-db-mcp-plus
 ```
 
 **systemd 部署**：
 ```bash
-cd /opt/apps/universal-db-mcp
+cd /opt/apps/universal-db-mcp-plus
 
 # 停止服务
-sudo systemctl stop universal-db-mcp
+sudo systemctl stop universal-db-mcp-plus
 
 # 拉取最新代码
 sudo git pull origin main
@@ -883,35 +883,35 @@ sudo npm ci
 sudo npm run build
 
 # 设置权限
-sudo chown -R universal-db-mcp:universal-db-mcp /opt/apps/universal-db-mcp
+sudo chown -R universal-db-mcp-plus:universal-db-mcp-plus /opt/apps/universal-db-mcp-plus
 
 # 启动服务
-sudo systemctl start universal-db-mcp
+sudo systemctl start universal-db-mcp-plus
 ```
 
 ### 备份配置
 
 ```bash
 # 备份环境变量
-cp /opt/apps/universal-db-mcp/.env /opt/backups/universal-db-mcp/.env.$(date +%Y%m%d)
+cp /opt/apps/universal-db-mcp-plus/.env /opt/backups/universal-db-mcp-plus/.env.$(date +%Y%m%d)
 
 # 备份 Nginx 配置
-sudo cp /etc/nginx/sites-available/universal-db-mcp /opt/backups/nginx/universal-db-mcp.$(date +%Y%m%d)
+sudo cp /etc/nginx/sites-available/universal-db-mcp-plus /opt/backups/nginx/universal-db-mcp-plus.$(date +%Y%m%d)
 ```
 
 ### 日志轮转
 
-创建 `/etc/logrotate.d/universal-db-mcp`：
+创建 `/etc/logrotate.d/universal-db-mcp-plus`：
 
 ```
-/var/log/universal-db-mcp/*.log {
+/var/log/universal-db-mcp-plus/*.log {
     daily
     missingok
     rotate 14
     compress
     delaycompress
     notifempty
-    create 0640 universal-db-mcp universal-db-mcp
+    create 0640 universal-db-mcp-plus universal-db-mcp-plus
     sharedscripts
     postrotate
         pm2 reloadLogs
@@ -938,8 +938,8 @@ newgrp docker
 # 克隆项目
 sudo mkdir -p /opt/apps && sudo chown $USER:$USER /opt/apps
 cd /opt/apps
-git clone https://github.com/Anarkh-Lee/universal-db-mcp.git
-cd universal-db-mcp
+git clone https://github.com/Anarkh-Lee/universal-db-mcp-plus.git
+cd universal-db-mcp-plus
 
 # 配置环境变量
 cp .env.example .env
@@ -956,8 +956,8 @@ curl http://localhost:3000/api/health
 
 ## 联系与支持
 
-- **项目地址**：https://github.com/Anarkh-Lee/universal-db-mcp
-- **问题反馈**：https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- **项目地址**：https://github.com/Anarkh-Lee/universal-db-mcp-plus
+- **问题反馈**：https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 - **文档**：查看项目 `docs/` 目录
 
 ---

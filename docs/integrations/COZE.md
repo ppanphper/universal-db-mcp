@@ -21,13 +21,13 @@ Deploy Universal Database MCP Server in HTTP API mode:
 ```bash
 # Using Docker
 docker run -d \
-  --name universal-db-mcp \
+  --name universal-db-mcp-plus \
   -p 3000:3000 \
   -e MODE=http \
   -e HTTP_PORT=3000 \
   -e API_KEYS=coze-secret-key \
   -e CORS_ORIGINS=* \
-  universal-db-mcp:latest
+  universal-db-mcp-plus:latest
 ```
 
 Or deploy to cloud platform (Railway, Render, Fly.io). See [Deployment Guide](../http-api/DEPLOYMENT.md).
@@ -418,5 +418,5 @@ Bot: Exported 5,432 active users
 ## Support
 
 For integration issues:
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 - Coze Community: https://www.coze.com/community

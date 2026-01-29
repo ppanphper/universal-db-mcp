@@ -2,7 +2,7 @@
 
 > **增强版特性**：原生支持多数据库动态切换、生产级 Schema 性能优化、SSH 隧道直连以及国产数据库适配。让 Claude Desktop 直接连接并管理您的整个数据基础设施。
 
-[![npm version](https://img.shields.io/npm/v/universal-db-mcp.svg)](https://www.npmjs.com/package/universal-db-mcp)
+[![npm version](https://img.shields.io/npm/v/universal-db-mcp-plus-plus.svg)](https://www.npmjs.com/package/universal-db-mcp-plus-plus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## 🌟 核心增强特性 (Vs Community)
@@ -68,7 +68,7 @@ MODE=http npm start
 
 ### 1. 安装依赖
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus-plus
 ```
 
 ### 2. 配置环境变量
@@ -115,11 +115,11 @@ cd docker
 docker-compose up -d
 
 # 或使用 Docker 直接运行
-docker build -t universal-db-mcp -f docker/Dockerfile .
+docker build -t universal-db-mcp-plus-plus -f docker/Dockerfile .
 docker run -p 3000:3000 \
   -e MODE=http \
   -e API_KEYS=your-key \
-  universal-db-mcp
+  universal-db-mcp-plus-plus
 ```
 
 
@@ -177,10 +177,10 @@ settings:
 #### 2. 启动服务
 ```bash
 # 自动加载当前目录下的 databases.yaml 或 databases.json
-npx universal-db-mcp
+npx universal-db-mcp-plus-plus
 
 # 或指定配置文件路径
-npx universal-db-mcp --config ./my-configs/db.yaml
+npx universal-db-mcp-plus-plus --config ./my-configs/db.yaml
 ```
 
 #### 3. Claude Desktop 配置
@@ -190,7 +190,7 @@ npx universal-db-mcp --config ./my-configs/db.yaml
     "universal-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus-plus",
         "--config", "/absolute/path/to/databases.yaml"
       ],
       "env": {
@@ -210,13 +210,13 @@ npx universal-db-mcp --config ./my-configs/db.yaml
 
 ```bash
 # MySQL
-npx universal-db-mcp --type mysql --host localhost --port 3306 --user root --password xxx --database test
+npx universal-db-mcp-plus-plus --type mysql --host localhost --port 3306 --user root --password xxx --database test
 
 # PostgreSQL
-npx universal-db-mcp --type postgres --host localhost --port 5432 --user postgres --password xxx --database test
+npx universal-db-mcp-plus-plus --type postgres --host localhost --port 5432 --user postgres --password xxx --database test
 
 # SQLite
-npx universal-db-mcp --type sqlite --file ./data.db
+npx universal-db-mcp-plus-plus --type sqlite --file ./data.db
 ```
 
 ## 📦 数据库配置参考
@@ -328,103 +328,103 @@ Cherry Studio 也支持 MCP 协议。在 Cherry Studio 中配置 MCP 主要是�
 #### 1. MySQL
 
 ```bash
-npx universal-db-mcp@latest --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
+npx universal-db-mcp-plus-plus@latest --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
 ```
 
 #### 2. PostgreSQL
 
 ```bash
-npx universal-db-mcp@latest --type postgres --host localhost --port 5432 --user postgres --password your_password --database your_database
+npx universal-db-mcp-plus-plus@latest --type postgres --host localhost --port 5432 --user postgres --password your_password --database your_database
 ```
 
 #### 3. Redis
 
 ```bash
-npx universal-db-mcp@latest --type redis --host localhost --port 6379 --password your_password
+npx universal-db-mcp-plus-plus@latest --type redis --host localhost --port 6379 --password your_password
 ```
 
 #### 4. Oracle
 
 ```bash
-npx universal-db-mcp@latest --type oracle --host localhost --port 1521 --user system --password your_password --database ORCL
+npx universal-db-mcp-plus-plus@latest --type oracle --host localhost --port 1521 --user system --password your_password --database ORCL
 ```
 
 #### 5. 达梦（DM）
 
 ```bash
-npx universal-db-mcp@latest --type dm --host localhost --port 5236 --user SYSDBA --password your_password --database DAMENG
+npx universal-db-mcp-plus-plus@latest --type dm --host localhost --port 5236 --user SYSDBA --password your_password --database DAMENG
 ```
 
 #### 6. SQL Server
 
 ```bash
-npx universal-db-mcp@latest --type sqlserver --host localhost --port 1433 --user sa --password your_password --database master
+npx universal-db-mcp-plus-plus@latest --type sqlserver --host localhost --port 1433 --user sa --password your_password --database master
 ```
 
 #### 7. MongoDB
 
 ```bash
-npx universal-db-mcp@latest --type mongodb --host localhost --port 27017 --user admin --password your_password --database test
+npx universal-db-mcp-plus-plus@latest --type mongodb --host localhost --port 27017 --user admin --password your_password --database test
 ```
 
 #### 8. SQLite
 
 ```bash
-npx universal-db-mcp@latest --type sqlite --file /path/to/your/database.db
+npx universal-db-mcp-plus-plus@latest --type sqlite --file /path/to/your/database.db
 ```
 
 #### 9. KingbaseES
 
 ```bash
-npx universal-db-mcp@latest --type kingbase --host localhost --port 54321 --user system --password your_password --database test
+npx universal-db-mcp-plus-plus@latest --type kingbase --host localhost --port 54321 --user system --password your_password --database test
 ```
 
 #### 10. GaussDB / OpenGauss
 
 ```bash
-npx universal-db-mcp@latest --type gaussdb --host localhost --port 5432 --user gaussdb --password your_password --database postgres
+npx universal-db-mcp-plus-plus@latest --type gaussdb --host localhost --port 5432 --user gaussdb --password your_password --database postgres
 ```
 
 #### 11. OceanBase
 
 ```bash
-npx universal-db-mcp@latest --type oceanbase --host localhost --port 2881 --user root@test --password your_password --database test
+npx universal-db-mcp-plus-plus@latest --type oceanbase --host localhost --port 2881 --user root@test --password your_password --database test
 ```
 
 #### 12. TiDB
 
 ```bash
-npx universal-db-mcp@latest --type tidb --host localhost --port 4000 --user root --password your_password --database test
+npx universal-db-mcp-plus-plus@latest --type tidb --host localhost --port 4000 --user root --password your_password --database test
 ```
 
 #### 13. ClickHouse
 
 ```bash
-npx universal-db-mcp@latest --type clickhouse --host localhost --port 8123 --user default --password "" --database default
+npx universal-db-mcp-plus-plus@latest --type clickhouse --host localhost --port 8123 --user default --password "" --database default
 ```
 
 #### 14. PolarDB
 
 ```bash
-npx universal-db-mcp@latest --type polardb --host pc-xxxxx.mysql.polardb.rds.aliyuncs.com --port 3306 --user your_username --password your_password --database your_database
+npx universal-db-mcp-plus-plus@latest --type polardb --host pc-xxxxx.mysql.polardb.rds.aliyuncs.com --port 3306 --user your_username --password your_password --database your_database
 ```
 
 #### 15. Vastbase
 
 ```bash
-npx universal-db-mcp@latest --type vastbase --host localhost --port 5432 --user vastbase --password your_password --database postgres
+npx universal-db-mcp-plus-plus@latest --type vastbase --host localhost --port 5432 --user vastbase --password your_password --database postgres
 ```
 
 #### 16. HighGo
 
 ```bash
-npx universal-db-mcp@latest --type highgo --host localhost --port 5866 --user highgo --password your_password --database highgo
+npx universal-db-mcp-plus-plus@latest --type highgo --host localhost --port 5866 --user highgo --password your_password --database highgo
 ```
 
 #### 17. GoldenDB
 
 ```bash
-npx universal-db-mcp@latest --type goldendb --host localhost --port 3306 --user root --password your_password --database test
+npx universal-db-mcp-plus-plus@latest --type goldendb --host localhost --port 3306 --user root --password your_password --database test
 ```
 
 **注意**：
@@ -449,7 +449,7 @@ Universal DB MCP 支持通过 SSH 隧道连接远程数据库，适用于数据�
 **CLI 方式**：
 
 ```bash
-npx universal-db-mcp \
+npx universal-db-mcp-plus-plus \
   --type mysql \
   --host 127.0.0.1 \
   --port 3306 \
@@ -497,7 +497,7 @@ npx universal-db-mcp \
 ```json
 {
   "args": [
-    "universal-db-mcp",
+    "universal-db-mcp-plus-plus",
     "--danger-allow-write",
     "--type", "mysql",
     ...
@@ -792,7 +792,7 @@ HTTP Client → REST API → Middleware → Routes → DatabaseService → Adapt
 ## 🔧 命令行参数
 
 ```bash
-universal-db-mcp [选项]
+universal-db-mcp-plus-plus [选项]
 
 选项：
   --config <path>          多数据库配置文件路径 (支持 .json, .yaml, .yml)

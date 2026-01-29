@@ -2,14 +2,14 @@ ROSTemplateFormatVersion: '2015-09-01'
 Transform: 'Aliyun::Serverless-2018-04-03'
 
 Resources:
-  universal-db-mcp:
+  universal-db-mcp-plus:
     Type: 'Aliyun::Serverless::Service'
     Properties:
       Description: 'Universal Database MCP Server - HTTP API Mode'
       Role: 'acs:ram::${AccountId}:role/aliyunfcdefaultrole'
       InternetAccess: true
       LogConfig:
-        Project: 'universal-db-mcp-logs'
+        Project: 'universal-db-mcp-plus-logs'
         Logstore: 'function-logs'
       VpcConfig:
         VpcId: 'vpc-xxxxx'  # Optional: Your VPC ID
