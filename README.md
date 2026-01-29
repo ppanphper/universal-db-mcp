@@ -2,7 +2,7 @@
 
 > 让 Claude Desktop 直接连接你的数据库，用自然语言查询和分析数据
 
-[![npm version](https://img.shields.io/npm/v/universal-db-mcp.svg)](https://www.npmjs.com/package/universal-db-mcp)
+[![npm version](https://img.shields.io/npm/v/universal-db-mcp-plus.svg)](https://www.npmjs.com/package/universal-db-mcp-plus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## 🎯 为什么使用本项目
@@ -38,13 +38,13 @@
 ### 安装
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 ```
 
 或使用 npx 直接运行（无需安装）：
 
 ```bash
-npx universal-db-mcp
+npx universal-db-mcp-plus
 ```
 
 ### 配置 Claude Desktop
@@ -64,7 +64,7 @@ npx universal-db-mcp
     "universal-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "localhost",
         "--port", "3306",
@@ -85,7 +85,7 @@ npx universal-db-mcp
     "universal-db-sqlite": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlite",
         "--file", "/path/to/your/database.db"
       ]
@@ -108,7 +108,7 @@ npx universal-db-mcp
     "kingbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "kingbase",
         "--host", "localhost",
         "--port", "54321",
@@ -134,7 +134,7 @@ npx universal-db-mcp
     "gaussdb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "gaussdb",
         "--host", "localhost",
         "--port", "5432",
@@ -161,7 +161,7 @@ npx universal-db-mcp
     "oceanbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oceanbase",
         "--host", "localhost",
         "--port", "2881",
@@ -188,7 +188,7 @@ npx universal-db-mcp
     "tidb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "tidb",
         "--host", "localhost",
         "--port", "4000",
@@ -215,7 +215,7 @@ npx universal-db-mcp
     "clickhouse-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "clickhouse",
         "--host", "localhost",
         "--port", "8123",
@@ -242,7 +242,7 @@ npx universal-db-mcp
     "polardb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "polardb",
         "--host", "pc-xxxxx.mysql.polardb.rds.aliyuncs.com",
         "--port", "3306",
@@ -280,7 +280,7 @@ Claude 会自动调用数据库工具完成查询！
 ```json
 {
   "args": [
-    "universal-db-mcp",
+    "universal-db-mcp-plus",
     "--danger-allow-write",
     "--type", "mysql",
     ...
@@ -316,7 +316,7 @@ Claude 会自动调用数据库工具完成查询！
 ## 🔧 命令行参数
 
 ```bash
-universal-db-mcp [选项]
+universal-db-mcp-plus [选项]
 
 选项：
   --type <db>              数据库类型 (mysql|postgres|redis|oracle|dm|sqlserver|mssql|mongodb|sqlite|kingbase|gaussdb|opengauss|oceanbase|tidb|clickhouse|polardb)
