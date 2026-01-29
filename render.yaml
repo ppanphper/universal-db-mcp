@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: universal-db-mcp
+    runtime: node
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:http
+    envVars:
+      - key: MODE
+        value: http
+      - key: HTTP_PORT
+        value: 3000
+      - key: HTTP_HOST
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production
+      - key: API_KEYS
+        sync: false
+      - key: CORS_ORIGINS
+        value: '*'
+      - key: RATE_LIMIT_MAX
+        value: 100
+      - key: RATE_LIMIT_WINDOW
+        value: 1m
+      - key: LOG_LEVEL
+        value: info
+    healthCheckPath: /api/health
+    autoDeploy: true
+    # scaling:
+    #   minInstances: 1
+    #   maxInstances: 3
+    #   targetCPUPercent: 70

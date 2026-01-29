@@ -3,6 +3,8 @@
  * 达梦数据库高度兼容 Oracle，使用类似的 API 和系统视图
  *
  * dmdb 驱动会作为可选依赖自动安装
+ *
+ * 性能优化：使用批量查询获取 Schema 信息，避免 N+1 查询问题
  */
 
 import type {
@@ -120,8 +122,14 @@ export class DMAdapter implements DbAdapter {
     const startTime = Date.now();
 
     try {
+      // 达梦兼容 Oracle，不需要末尾的分号，移除它以避免语法错误
+      let cleanQuery = query.trim();
+      if (cleanQuery.endsWith(';')) {
+        cleanQuery = cleanQuery.slice(0, -1).trim();
+      }
+
       // 执行查询
-      const result = await this.connection.execute(query, params || [], {
+      const result = await this.connection.execute(cleanQuery, params || [], {
         autoCommit: false,
       });
 
@@ -173,7 +181,15 @@ export class DMAdapter implements DbAdapter {
   }
 
   /**
-   * 获取数据库结构信息
+   * 获取数据库结构信息（批量查询优化版本）
+   *
+   * 达梦数据库中：
+   * - database 是数据库实例名（如 DAMENG）
+   * - schema 是用户的命名空间（通常与用户名相同，如 SHOP）
+   * - 表存储在 schema 下，不是 database 下
+   *
+   * 注意：dmdb 驱动返回的列名是数字索引（"0", "1", ...），不是列名！
+   * 因此需要按索引位置访问数据。
    */
   async getSchema(): Promise<SchemaInfo> {
     if (!this.connection) {
@@ -187,25 +203,49 @@ export class DMAdapter implements DbAdapter {
         []
       );
       const version = versionResult.rows?.[0]
-        ? Object.values(versionResult.rows[0])[0] as string
+        ? this.getValueByIndex(versionResult.rows[0], 0) as string
         : 'unknown';
 
-      // 获取当前用户
+      // 获取当前 schema（在达梦中，schema 通常与用户名相同）
+      const schemaResult = await this.connection.execute(
+        `SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL`,
+        []
+      );
+      const currentSchema = schemaResult.rows?.[0]
+        ? this.getValueByIndex(schemaResult.rows[0], 0) as string
+        : '';
+
+      // 获取当前用户（作为备选）
       const userResult = await this.connection.execute('SELECT USER FROM DUAL', []);
-      const databaseName = userResult.rows?.[0]
-        ? Object.values(userResult.rows[0])[0] as string
-        : 'unknown';
+      const currentUser = userResult.rows?.[0]
+        ? this.getValueByIndex(userResult.rows[0], 0) as string
+        : '';
 
-      // 获取所有表
-      const tablesResult = await this.connection.execute(
-        `SELECT TABLE_NAME, NUM_ROWS
-         FROM USER_TABLES
-         ORDER BY TABLE_NAME`,
+      // schema 名称：优先使用当前 schema，其次使用当前用户，最后使用配置的用户名
+      const schemaName = (currentSchema || currentUser || this.config.user || '').toUpperCase();
+      const databaseName = schemaName || 'unknown';
+
+      // 获取所有表的列信息
+      // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=DATA_TYPE, 3=DATA_LENGTH,
+      //        4=DATA_PRECISION, 5=DATA_SCALE, 6=NULLABLE, 7=DATA_DEFAULT, 8=COLUMN_ID
+      const allColumnsResult = await this.connection.execute(
+        `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+                DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
+         FROM USER_TAB_COLUMNS
+         ORDER BY TABLE_NAME, COLUMN_ID`,
         []
       );
 
-      const tableInfos: TableInfo[] = [];
+      // 获取所有列注释
+      // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=COMMENTS
+      const allCommentsResult = await this.connection.execute(
+        `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
+         FROM USER_COL_COMMENTS
+         WHERE COMMENTS IS NOT NULL`,
+        []
+      );
 
+<<<<<<< HEAD
       if (tablesResult.rows) {
         // 并行获取所有表的详细信息
         const tableNames = tablesResult.rows.map((row: any) => row.TABLE_NAME);
@@ -214,13 +254,47 @@ export class DMAdapter implements DbAdapter {
         );
         tableInfos.push(...tableInfoResults);
       }
+=======
+      // 获取所有主键信息
+      // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=POSITION
+      const allPrimaryKeysResult = await this.connection.execute(
+        `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
+         FROM USER_CONSTRAINTS cons
+         JOIN USER_CONS_COLUMNS cols
+           ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
+         WHERE cons.CONSTRAINT_TYPE = 'P'
+         ORDER BY cons.TABLE_NAME, cols.POSITION`,
+        []
+      );
+>>>>>>> feat/optimize-mysql-schema
 
-      return {
-        databaseType: 'dm',
+      // 获取所有索引信息
+      // 列顺序: 0=TABLE_NAME, 1=INDEX_NAME, 2=UNIQUENESS, 3=COLUMN_NAME, 4=COLUMN_POSITION
+      const allIndexesResult = await this.connection.execute(
+        `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+         FROM USER_INDEXES i
+         JOIN USER_IND_COLUMNS ic
+           ON i.INDEX_NAME = ic.INDEX_NAME
+         ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
+        []
+      );
+
+      // 获取所有表的行数估算
+      // 列顺序: 0=TABLE_NAME, 1=NUM_ROWS
+      const allStatsResult = await this.connection.execute(
+        `SELECT TABLE_NAME, NUM_ROWS FROM USER_TABLES`,
+        []
+      );
+
+      return this.assembleSchemaFromIndexedRows(
         databaseName,
-        tables: tableInfos,
         version,
-      };
+        allColumnsResult.rows || [],
+        allCommentsResult.rows || [],
+        allPrimaryKeysResult.rows || [],
+        allIndexesResult.rows || [],
+        allStatsResult.rows || []
+      );
     } catch (error) {
       throw new Error(
         `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
@@ -229,144 +303,208 @@ export class DMAdapter implements DbAdapter {
   }
 
   /**
-   * 获取单个表的详细信息
+   * 按索引获取对象的值（dmdb 驱动返回的列名是数字索引）
    */
-  private async getTableInfo(tableName: string): Promise<TableInfo> {
-    if (!this.connection) {
-      throw new Error('数据库未连接');
+  private getValueByIndex(obj: any, index: number): unknown {
+    if (!obj || typeof obj !== 'object') {
+      return undefined;
+    }
+    // 尝试按数字索引访问
+    if (obj[index] !== undefined) {
+      return obj[index];
+    }
+    // 尝试按字符串索引访问
+    if (obj[String(index)] !== undefined) {
+      return obj[String(index)];
+    }
+    // 尝试按位置获取值
+    const values = Object.values(obj);
+    return values.length > index ? values[index] : undefined;
+  }
+
+  /**
+   * 组装 Schema 信息（处理 dmdb 驱动返回的数字索引列名）
+   */
+  private assembleSchemaFromIndexedRows(
+    databaseName: string,
+    version: string,
+    allColumns: any[],
+    allComments: any[],
+    allPrimaryKeys: any[],
+    allIndexes: any[],
+    allStats: any[]
+  ): SchemaInfo {
+    // 按表名分组列信息
+    // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=DATA_TYPE, 3=DATA_LENGTH,
+    //        4=DATA_PRECISION, 5=DATA_SCALE, 6=NULLABLE, 7=DATA_DEFAULT, 8=COLUMN_ID
+    const columnsByTable = new Map<string, ColumnInfo[]>();
+
+    for (const col of allColumns) {
+      const tableName = this.getValueByIndex(col, 0) as string;
+      const columnName = this.getValueByIndex(col, 1) as string;
+      const dataType = this.getValueByIndex(col, 2);
+      const dataLength = this.getValueByIndex(col, 3) as number;
+      const dataPrecision = this.getValueByIndex(col, 4) as number;
+      const dataScale = this.getValueByIndex(col, 5) as number;
+      const nullable = this.getValueByIndex(col, 6) as string;
+      const dataDefault = this.getValueByIndex(col, 7);
+
+      // 跳过无效数据
+      if (!tableName || !columnName) {
+        continue;
+      }
+
+      if (!columnsByTable.has(tableName)) {
+        columnsByTable.set(tableName, []);
+      }
+
+      columnsByTable.get(tableName)!.push({
+        name: String(columnName).toLowerCase(),
+        type: this.formatDMType(
+          dataType as string | number | null | undefined,
+          dataLength,
+          dataPrecision,
+          dataScale
+        ),
+        nullable: nullable === 'Y',
+        defaultValue: dataDefault ? String(dataDefault).trim() : undefined,
+      });
     }
 
-    // 获取列信息
-    const columnsResult = await this.connection.execute(
-      `SELECT COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
-              DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
-       FROM USER_TAB_COLUMNS
-       WHERE TABLE_NAME = :1
-       ORDER BY COLUMN_ID`,
-      [tableName]
-    );
+    // 按表名分组列注释
+    // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=COMMENTS
+    const commentsByTable = new Map<string, Map<string, string>>();
+    for (const comment of allComments) {
+      const tableName = this.getValueByIndex(comment, 0) as string;
+      const columnName = this.getValueByIndex(comment, 1) as string;
+      const comments = this.getValueByIndex(comment, 2) as string;
 
-    const columnInfos: ColumnInfo[] = [];
-    if (columnsResult.rows) {
-      for (const col of columnsResult.rows) {
-        const colData = col as any;
-        columnInfos.push({
-          name: colData.COLUMN_NAME.toLowerCase(),
-          type: this.formatDMType(
-            colData.DATA_TYPE,
-            colData.DATA_LENGTH,
-            colData.DATA_PRECISION,
-            colData.DATA_SCALE
-          ),
-          nullable: colData.NULLABLE === 'Y',
-          defaultValue: colData.DATA_DEFAULT?.trim() || undefined,
-        });
+      // 跳过无效数据
+      if (!tableName || !columnName || !comments) {
+        continue;
       }
-    }
 
-    // 获取列注释
-    const commentsResult = await this.connection.execute(
-      `SELECT COLUMN_NAME, COMMENTS
-       FROM USER_COL_COMMENTS
-       WHERE TABLE_NAME = :1
-         AND COMMENTS IS NOT NULL`,
-      [tableName]
-    );
-
-    const commentsMap = new Map<string, string>();
-    if (commentsResult.rows) {
-      for (const row of commentsResult.rows) {
-        const rowData = row as any;
-        commentsMap.set(
-          rowData.COLUMN_NAME.toLowerCase(),
-          rowData.COMMENTS
-        );
+      if (!commentsByTable.has(tableName)) {
+        commentsByTable.set(tableName, new Map());
       }
+      commentsByTable.get(tableName)!.set(
+        String(columnName).toLowerCase(),
+        String(comments)
+      );
     }
 
     // 将注释添加到列信息中
-    for (const col of columnInfos) {
-      if (commentsMap.has(col.name)) {
-        col.comment = commentsMap.get(col.name);
-      }
-    }
-
-    // 获取主键
-    const primaryKeysResult = await this.connection.execute(
-      `SELECT cols.COLUMN_NAME, cols.POSITION
-       FROM USER_CONSTRAINTS cons
-       JOIN USER_CONS_COLUMNS cols
-         ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
-       WHERE cons.CONSTRAINT_TYPE = 'P'
-         AND cons.TABLE_NAME = :1
-       ORDER BY cols.POSITION`,
-      [tableName]
-    );
-
-    const primaryKeys: string[] = [];
-    if (primaryKeysResult.rows) {
-      for (const row of primaryKeysResult.rows) {
-        primaryKeys.push((row as any).COLUMN_NAME.toLowerCase());
-      }
-    }
-
-    // 获取索引信息
-    const indexesResult = await this.connection.execute(
-      `SELECT i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
-       FROM USER_INDEXES i
-       JOIN USER_IND_COLUMNS ic
-         ON i.INDEX_NAME = ic.INDEX_NAME
-       WHERE i.TABLE_NAME = :1
-       ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION`,
-      [tableName]
-    );
-
-    const indexMap = new Map<string, { columns: string[]; unique: boolean }>();
-    if (indexesResult.rows) {
-      for (const row of indexesResult.rows) {
-        const rowData = row as any;
-        const indexName = rowData.INDEX_NAME;
-
-        // 跳过主键索引
-        if (indexName.includes('PK_') || indexName.includes('SYS_')) {
-          continue;
+    for (const [tableName, columns] of columnsByTable.entries()) {
+      const tableComments = commentsByTable.get(tableName);
+      if (tableComments) {
+        for (const col of columns) {
+          if (tableComments.has(col.name)) {
+            col.comment = tableComments.get(col.name);
+          }
         }
+      }
+    }
 
-        if (!indexMap.has(indexName)) {
-          indexMap.set(indexName, {
-            columns: [],
-            unique: rowData.UNIQUENESS === 'UNIQUE',
+    // 按表名分组主键信息
+    // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=POSITION
+    const primaryKeysByTable = new Map<string, string[]>();
+    for (const pk of allPrimaryKeys) {
+      const tableName = this.getValueByIndex(pk, 0) as string;
+      const columnName = this.getValueByIndex(pk, 1) as string;
+
+      // 跳过无效数据
+      if (!tableName || !columnName) {
+        continue;
+      }
+
+      if (!primaryKeysByTable.has(tableName)) {
+        primaryKeysByTable.set(tableName, []);
+      }
+      primaryKeysByTable.get(tableName)!.push(String(columnName).toLowerCase());
+    }
+
+    // 按表名分组索引信息
+    // 列顺序: 0=TABLE_NAME, 1=INDEX_NAME, 2=UNIQUENESS, 3=COLUMN_NAME, 4=COLUMN_POSITION
+    const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
+
+    for (const idx of allIndexes) {
+      const tableName = this.getValueByIndex(idx, 0) as string;
+      const indexName = this.getValueByIndex(idx, 1) as string;
+      const uniqueness = this.getValueByIndex(idx, 2) as string;
+      const columnName = this.getValueByIndex(idx, 3) as string;
+
+      // 跳过无效数据
+      if (!tableName || !indexName || !columnName) {
+        continue;
+      }
+
+      // 跳过主键索引和系统索引
+      const idxNameStr = String(indexName);
+      if (idxNameStr.includes('PK_') || idxNameStr.startsWith('INDEX') || idxNameStr.includes('SYS_')) {
+        continue;
+      }
+
+      if (!indexesByTable.has(tableName)) {
+        indexesByTable.set(tableName, new Map());
+      }
+
+      const tableIndexes = indexesByTable.get(tableName)!;
+
+      if (!tableIndexes.has(indexName)) {
+        tableIndexes.set(indexName, {
+          columns: [],
+          unique: uniqueness === 'UNIQUE',
+        });
+      }
+
+      tableIndexes.get(indexName)!.columns.push(String(columnName).toLowerCase());
+    }
+
+    // 按表名分组行数统计
+    // 列顺序: 0=TABLE_NAME, 1=NUM_ROWS
+    const rowsByTable = new Map<string, number>();
+    for (const stat of allStats) {
+      const tableName = this.getValueByIndex(stat, 0) as string;
+      const numRows = this.getValueByIndex(stat, 1);
+      if (tableName) {
+        rowsByTable.set(tableName, Number(numRows) || 0);
+      }
+    }
+
+    // 组装表信息
+    const tableInfos: TableInfo[] = [];
+
+    for (const [tableName, columns] of columnsByTable.entries()) {
+      const tableIndexes = indexesByTable.get(tableName);
+      const indexInfos: IndexInfo[] = [];
+
+      if (tableIndexes) {
+        for (const [indexName, indexData] of tableIndexes.entries()) {
+          indexInfos.push({
+            name: indexName,
+            columns: indexData.columns,
+            unique: indexData.unique,
           });
         }
-
-        indexMap.get(indexName)!.columns.push(rowData.COLUMN_NAME.toLowerCase());
       }
+
+      tableInfos.push({
+        name: String(tableName).toLowerCase(),
+        columns,
+        primaryKeys: primaryKeysByTable.get(tableName) || [],
+        indexes: indexInfos,
+        estimatedRows: rowsByTable.get(tableName) || 0,
+      });
     }
 
-    const indexInfos: IndexInfo[] = Array.from(indexMap.entries()).map(
-      ([name, info]) => ({
-        name,
-        columns: info.columns,
-        unique: info.unique,
-      })
-    );
-
-    // 获取表行数估算
-    const rowCountResult = await this.connection.execute(
-      `SELECT NUM_ROWS FROM USER_TABLES WHERE TABLE_NAME = :1`,
-      [tableName]
-    );
-
-    const estimatedRows = rowCountResult.rows?.[0]
-      ? ((rowCountResult.rows[0] as any).NUM_ROWS || 0)
-      : 0;
+    // 按表名排序
+    tableInfos.sort((a, b) => a.name.localeCompare(b.name));
 
     return {
-      name: tableName.toLowerCase(),
-      columns: columnInfos,
-      primaryKeys,
-      indexes: indexInfos,
-      estimatedRows,
+      databaseType: 'dm',
+      databaseName,
+      tables: tableInfos,
+      version,
     };
   }
 
@@ -374,39 +512,73 @@ export class DMAdapter implements DbAdapter {
    * 格式化达梦数据类型
    */
   private formatDMType(
-    dataType: string,
+    dataType: string | number | undefined | null,
     length?: number,
     precision?: number,
     scale?: number
   ): string {
-    switch (dataType) {
+    // 处理空值
+    if (dataType === null || dataType === undefined) {
+      return 'UNKNOWN';
+    }
+
+    // 达梦的 TYPE$ 可能是数字类型代码，需要转换
+    const typeMap: Record<number, string> = {
+      0: 'CHAR',
+      1: 'VARCHAR',
+      2: 'VARCHAR2',
+      3: 'BIT',
+      4: 'TINYINT',
+      5: 'SMALLINT',
+      6: 'INT',
+      7: 'BIGINT',
+      8: 'DECIMAL',
+      9: 'FLOAT',
+      10: 'DOUBLE',
+      11: 'BLOB',
+      12: 'DATE',
+      13: 'TIME',
+      14: 'DATETIME',
+      15: 'TIMESTAMP',
+      17: 'BINARY',
+      18: 'VARBINARY',
+      19: 'CLOB',
+      21: 'TEXT',
+      22: 'IMAGE',
+      23: 'BFILE',
+    };
+
+    let typeName: string;
+    if (typeof dataType === 'number') {
+      typeName = typeMap[dataType] || `TYPE_${dataType}`;
+    } else {
+      typeName = String(dataType);
+    }
+
+    // 添加长度/精度信息
+    switch (typeName) {
+      case 'DECIMAL':
       case 'NUMBER':
       case 'NUMERIC':
-      case 'DECIMAL':
-        if (precision !== null && precision !== undefined) {
-          if (scale !== null && scale !== undefined && scale > 0) {
-            return `${dataType}(${precision},${scale})`;
-          }
-          return `${dataType}(${precision})`;
+        if (precision && scale && scale > 0) {
+          return `${typeName}(${precision},${scale})`;
+        } else if (precision) {
+          return `${typeName}(${precision})`;
+        } else if (length) {
+          return `${typeName}(${length})`;
         }
-        return dataType;
+        return typeName;
 
       case 'VARCHAR':
       case 'VARCHAR2':
       case 'CHAR':
         if (length) {
-          return `${dataType}(${length})`;
+          return `${typeName}(${length})`;
         }
-        return dataType;
-
-      case 'TIMESTAMP':
-        if (scale !== null && scale !== undefined) {
-          return `TIMESTAMP(${scale})`;
-        }
-        return 'TIMESTAMP';
+        return typeName;
 
       default:
-        return dataType;
+        return typeName;
     }
   }
 

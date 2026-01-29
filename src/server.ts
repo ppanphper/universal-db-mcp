@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * MCP 数据库万能连接器 - 主服务器
  * 通过 Model Context Protocol 让 Claude Desktop 连接数据库
@@ -940,3 +938,11 @@ export class DatabaseMCPServer {
     }
   }
 }
+=======
+ * Backward Compatibility Shim
+ * Re-exports DatabaseMCPServer from mcp/mcp-server.ts
+ * This maintains compatibility with any external code that imports from server.ts
+ */
+
+export { DatabaseMCPServer } from './mcp/mcp-server.js';
+>>>>>>> feat/optimize-mysql-schema

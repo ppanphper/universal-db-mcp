@@ -1,0 +1,82 @@
+/**
+ * Configuration Loader Unit Tests
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { loadFromEnv, mergeConfigs } from '../../src/utils/config-loader';
+
+describe('Configuration Loader', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  describe('loadFromEnv', () => {
+    it('should load MODE from environment', () => {
+      process.env.MODE = 'http';
+      const config = loadFromEnv();
+      expect(config.mode).toBe('http');
+    });
+
+    it('should load HTTP configuration', () => {
+      process.env.HTTP_PORT = '8080';
+      process.env.HTTP_HOST = '127.0.0.1';
+      process.env.API_KEYS = 'key1,key2';
+
+      const config = loadFromEnv();
+      expect(config.http?.port).toBe(8080);
+      expect(config.http?.host).toBe('127.0.0.1');
+      expect(config.http?.apiKeys).toEqual(['key1', 'key2']);
+    });
+
+    it('should load database configuration', () => {
+      process.env.DB_TYPE = 'mysql';
+      process.env.DB_HOST = 'localhost';
+      process.env.DB_PORT = '3306';
+
+      const config = loadFromEnv();
+      expect(config.database?.type).toBe('mysql');
+      expect(config.database?.host).toBe('localhost');
+      expect(config.database?.port).toBe(3306);
+    });
+  });
+
+  describe('mergeConfigs', () => {
+    it('should merge multiple configs with priority', () => {
+      const config1 = { mode: 'mcp' as const };
+      const config2 = { mode: 'http' as const };
+
+      const merged = mergeConfigs(config1, config2);
+      expect(merged.mode).toBe('http');
+    });
+
+    it('should merge HTTP configs', () => {
+      const config1 = {
+        http: {
+          port: 3000,
+          host: '0.0.0.0',
+          apiKeys: ['key1'],
+          cors: { origins: '*', credentials: false },
+          rateLimit: { max: 100, window: '1m' },
+          logging: { level: 'info' as const, pretty: false },
+          session: { timeout: 3600000, cleanupInterval: 300000 }
+        }
+      };
+      const config2 = {
+        http: {
+          port: 8080,
+          apiKeys: ['key2']
+        }
+      };
+
+      const merged = mergeConfigs(config1, config2);
+      expect(merged.http?.port).toBe(8080);
+      expect(merged.http?.apiKeys).toEqual(['key2']);
+    });
+  });
+});

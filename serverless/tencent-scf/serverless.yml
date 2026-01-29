@@ -1,0 +1,59 @@
+component: scf
+name: universal-db-mcp
+
+inputs:
+  name: universal-db-mcp-api
+  src: ./
+  handler: index.handler
+  runtime: Nodejs20.15
+  region: ap-guangzhou
+  description: Universal Database MCP Server - HTTP API Mode
+  memorySize: 512
+  timeout: 60
+  initTimeout: 3
+  retryNum: 2
+
+  environment:
+    variables:
+      MODE: http
+      HTTP_PORT: 9000
+      API_KEYS: ${env:API_KEYS}
+      CORS_ORIGINS: '*'
+      RATE_LIMIT_MAX: 100
+      RATE_LIMIT_WINDOW: 1m
+      LOG_LEVEL: info
+      NODE_ENV: production
+
+  events:
+    - apigw:
+        name: universal-db-mcp-apigw
+        parameters:
+          protocols:
+            - http
+            - https
+          environment: release
+          netTypes:
+            - OUTER
+          serviceName: universal-db-mcp-service
+          description: Universal Database MCP API Gateway
+          endpoints:
+            - path: /
+              method: ANY
+              function:
+                functionName: universal-db-mcp-api
+                isIntegratedResponse: true
+              enableCORS: true
+              responseType: JSON
+              serviceTimeout: 60
+
+  layers:
+    - name: universal-db-mcp-deps
+      version: 1
+
+  vpc:
+    vpcId: ${env:VPC_ID}
+    subnetId: ${env:SUBNET_ID}
+
+  tags:
+    app: universal-db-mcp
+    env: production

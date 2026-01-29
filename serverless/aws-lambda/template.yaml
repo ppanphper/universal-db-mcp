@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Universal Database MCP Server - HTTP API Mode
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 512
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        MODE: http
+        HTTP_PORT: 9000
+        API_KEYS: !Ref ApiKeys
+        CORS_ORIGINS: '*'
+        RATE_LIMIT_MAX: 100
+        RATE_LIMIT_WINDOW: 1m
+        LOG_LEVEL: info
+        NODE_ENV: production
+
+Parameters:
+  ApiKeys:
+    Type: String
+    Description: API Keys (comma-separated)
+    NoEcho: true
+
+Resources:
+  UniversalDbMcpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: universal-db-mcp-api
+      Description: Universal Database MCP API Handler
+      CodeUri: ./
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId: !Ref UniversalDbMcpApi
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaVPCAccessExecutionRole
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+
+  UniversalDbMcpApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: universal-db-mcp-api
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-API-Key'"
+        AllowOrigin: "'*'"
+      DefinitionBody:
+        openapi: 3.0.0
+        info:
+          title: Universal Database MCP API
+          version: 1.0.0
+        paths:
+          /{proxy+}:
+            x-amazon-apigateway-any-method:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UniversalDbMcpFunction.Arn}/invocations
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda function
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${UniversalDbMcpApi}.execute-api.${AWS::Region}.amazonaws.com/prod/
+
+  FunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt UniversalDbMcpFunction.Arn
