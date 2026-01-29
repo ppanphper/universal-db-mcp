@@ -1,0 +1,59 @@
+ROSTemplateFormatVersion: '2015-09-01'
+Transform: 'Aliyun::Serverless-2018-04-03'
+
+Resources:
+  universal-db-mcp:
+    Type: 'Aliyun::Serverless::Service'
+    Properties:
+      Description: 'Universal Database MCP Server - HTTP API Mode'
+      Role: 'acs:ram::${AccountId}:role/aliyunfcdefaultrole'
+      InternetAccess: true
+      LogConfig:
+        Project: 'universal-db-mcp-logs'
+        Logstore: 'function-logs'
+      VpcConfig:
+        VpcId: 'vpc-xxxxx'  # Optional: Your VPC ID
+        VSwitchIds:
+          - 'vsw-xxxxx'  # Optional: Your VSwitch ID
+        SecurityGroupId: 'sg-xxxxx'  # Optional: Your Security Group ID
+
+    universal-db-api:
+      Type: 'Aliyun::Serverless::Function'
+      Properties:
+        Description: 'Universal Database MCP API Handler'
+        Handler: index.handler
+        Runtime: nodejs20
+        CodeUri: './'
+        MemorySize: 512
+        Timeout: 60
+        InstanceConcurrency: 10
+        EnvironmentVariables:
+          MODE: 'http'
+          HTTP_PORT: '9000'
+          API_KEYS: '${ApiKeys}'
+          CORS_ORIGINS: '*'
+          RATE_LIMIT_MAX: '100'
+          RATE_LIMIT_WINDOW: '1m'
+          LOG_LEVEL: 'info'
+          NODE_ENV: 'production'
+
+        Events:
+          httpTrigger:
+            Type: HTTP
+            Properties:
+              AuthType: ANONYMOUS
+              Methods:
+                - GET
+                - POST
+                - PUT
+                - DELETE
+                - OPTIONS
+              Domains:
+                - Domain: 'auto'  # Auto-generated domain
+                  Protocol:
+                    - HTTP
+                    - HTTPS
+                  RouteConfig:
+                    Routes:
+                      - Path: '/*'
+                        Qualifier: 'LATEST'

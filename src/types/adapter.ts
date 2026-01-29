@@ -25,9 +25,10 @@ export interface DbAdapter {
 
   /**
    * 获取数据库结构信息
+   * @param tableNames - 可选，指定要获取的表名列表。如果不传，则获取所有表。
    * @returns 数据库的表结构、索引等元数据
    */
-  getSchema(): Promise<SchemaInfo>;
+  getSchema(tableNames?: string[]): Promise<SchemaInfo>;
 
   /**
    * 检查查询是否为写操作
@@ -35,6 +36,46 @@ export interface DbAdapter {
    * @returns 如果是写操作返回 true
    */
   isWriteOperation(query: string): boolean;
+
+  // ========== 可选的扩展方法 ==========
+
+  /**
+   * 批量执行多条查询（可选）
+   * @param queries - 查询语句数组
+   * @returns 批量执行结果
+   */
+  batchExecute?(queries: string[]): Promise<BatchResult>;
+
+  /**
+   * 开始事务（可选）
+   */
+  beginTransaction?(): Promise<void>;
+
+  /**
+   * 提交事务（可选）
+   */
+  commit?(): Promise<void>;
+
+  /**
+   * 回滚事务（可选）
+   */
+  rollback?(): Promise<void>;
+
+  /**
+   * 执行查询返回单条记录（可选）
+   * @param query - SQL 查询语句
+   * @param params - 查询参数
+   * @returns 单条记录或 null
+   */
+  querySingle?(query: string, params?: unknown[]): Promise<Record<string, unknown> | null>;
+
+  /**
+   * 获取标量值（可选）
+   * @param query - SQL 查询语句
+   * @param params - 查询参数
+   * @returns 标量值
+   */
+  getScalar?(query: string, params?: unknown[]): Promise<unknown>;
 }
 
 /**
@@ -52,11 +93,32 @@ export interface QueryResult {
 }
 
 /**
+ * 批量执行结果接口
+ */
+export interface BatchResult {
+  /** 各查询的执行结果 */
+  results: QueryResult[];
+  /** 总受影响行数 */
+  totalAffectedRows: number;
+  /** 执行出错的查询 */
+  errors: Array<{
+    /** 查询索引 */
+    index: number;
+    /** 错误信息 */
+    error: string;
+    /** 原始查询 */
+    query: string;
+  }>;
+  /** 总执行时间（毫秒） */
+  totalExecutionTime: number;
+}
+
+/**
  * 数据库结构信息
  */
 export interface SchemaInfo {
   /** 数据库类型 */
-  databaseType: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb';
+  databaseType: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb' | 'goldendb' | 'highgo' | 'vastbase';
   /** 数据库名称 */
   databaseName: string;
   /** 表信息列表 */
@@ -109,11 +171,13 @@ export interface IndexInfo {
   unique: boolean;
 }
 
+import type { SSHConfig } from './ssh.js';
+
 /**
  * 数据库连接配置
  */
 export interface DbConfig {
-  type: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb';
+  type: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb' | 'goldendb' | 'highgo' | 'vastbase';
   host?: string;
   port?: number;
   user?: string;
@@ -123,4 +187,6 @@ export interface DbConfig {
   filePath?: string;
   /** 是否允许写操作（默认 false，只读模式） */
   allowWrite?: boolean;
+  /** SSH 隧道配置 */
+  ssh?: SSHConfig;
 }

@@ -355,22 +355,20 @@ export class MongoDBAdapter implements DbAdapter {
       // 获取所有集合
       const collections = await this.db.listCollections().toArray();
 
-      const tables: TableInfo[] = [];
+      // const tables: TableInfo[] = []; // Removed to avoid redeclaration
 
-      for (const collInfo of collections) {
+      // 过滤掉系统集合
+      const validCollections = collections.filter(c => !c.name.startsWith('system.'));
+
+      // 并行获取所有集合的详细信息
+      const tableInfoResults = await Promise.all(validCollections.map(async (collInfo) => {
         const collectionName = collInfo.name;
-
-        // 跳过系统集合
-        if (collectionName.startsWith('system.')) {
-          continue;
-        }
-
-        const collection = this.db.collection(collectionName);
+        const collection = this.db!.collection(collectionName);
 
         // 获取集合统计信息
         let estimatedRows = 0;
         try {
-          const stats = await this.db.command({ collStats: collectionName });
+          const stats = await this.db!.command({ collStats: collectionName });
           estimatedRows = stats.count || 0;
         } catch (error) {
           // 如果获取统计失败，使用 countDocuments
@@ -412,13 +410,15 @@ export class MongoDBAdapter implements DbAdapter {
         // MongoDB 的 _id 字段通常是主键
         const primaryKeys = columns.some(col => col.name === '_id') ? ['_id'] : [];
 
-        tables.push({
+        return {
           name: collectionName,
           columns,
           primaryKeys,
           estimatedRows,
-        });
-      }
+        };
+      }));
+
+      const tables: TableInfo[] = tableInfoResults;
 
       return {
         databaseType: 'mongodb',

@@ -18,6 +18,9 @@
 - [TiDB 使用示例](#tidb-使用示例)
 - [ClickHouse 使用示例](#clickhouse-使用示例)
 - [PolarDB 使用示例](#polardb-使用示例)
+- [Vastbase 使用示例](#vastbase-使用示例)
+- [HighGo 使用示例](#highgo-使用示例)
+- [GoldenDB 使用示例](#goldendb-使用示例)
 - [Claude Desktop 配置示例](#claude-desktop-配置示例)
 - [常见使用场景](#常见使用场景)
 
@@ -1915,6 +1918,632 @@ PolarDB 作为云原生数据库，有许多特色功能：
    - 设置白名单
    - 定期更换密码
    - 使用 RAM 账号管理权限
+
+---
+
+## Vastbase 使用示例
+
+### 基础配置（只读模式）
+
+```json
+{
+  "mcpServers": {
+    "vastbase-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "vastbase",
+        "--host", "localhost",
+        "--port", "5432",
+        "--user", "vastbase",
+        "--password", "your_password",
+        "--database", "postgres"
+      ]
+    }
+  }
+}
+```
+
+### 启用写入模式
+
+```json
+{
+  "mcpServers": {
+    "vastbase-write": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "vastbase",
+        "--host", "localhost",
+        "--port", "5432",
+        "--user", "vastbase",
+        "--password", "your_password",
+        "--database", "mydb",
+        "--danger-allow-write"
+      ]
+    }
+  }
+}
+```
+
+### 连接 Vastbase 集群
+
+```json
+{
+  "mcpServers": {
+    "vastbase-cluster": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "vastbase",
+        "--host", "vastbase-cluster.example.com",
+        "--port", "5432",
+        "--user", "your_username",
+        "--password", "your_password",
+        "--database", "production"
+      ]
+    }
+  }
+}
+```
+
+### 与 Claude 对话示例
+
+**用户**: 查看数据库中有哪些表？
+
+**Claude 会自动**:
+1. 调用 `get_schema` 工具
+2. 查询 `information_schema.tables`
+3. 返回表列表
+
+**用户**: 查看 employees 表的结构
+
+**Claude 会自动**:
+1. 调用 `get_table_info` 工具
+2. 查询 `information_schema.columns`
+3. 返回列信息、主键、索引等详细信息
+
+**用户**: 统计每个部门的员工数量
+
+**Claude 会自动**:
+1. 理解需求
+2. 生成 SQL: `SELECT department, COUNT(*) as employee_count FROM employees GROUP BY department ORDER BY employee_count DESC`
+3. 执行并返回结果
+
+**用户**: 查找最近一周入职的员工
+
+**Claude 会自动**:
+1. 生成 SQL: `SELECT * FROM employees WHERE hire_date >= CURRENT_DATE - INTERVAL '7 days' ORDER BY hire_date DESC`
+2. 执行并返回结果
+
+### 注意事项
+
+1. **默认端口**: 5432（与 PostgreSQL 相同）
+2. **兼容性**: 兼容 PostgreSQL 协议和大部分 SQL 语法
+3. **驱动**: 使用 PostgreSQL 的 `pg` 驱动
+4. **国产数据库**: 海量数据公司开发，支持国产化替代
+5. **企业级特性**:
+   - 支持分布式架构
+   - 支持高可用集群
+   - 支持数据加密
+   - 支持审计日志
+
+### 支持的版本
+
+- ✅ Vastbase G100 V2.2
+- ✅ Vastbase G100 V2.3
+- ✅ 其他兼容 PostgreSQL 的版本
+
+### 常见使用场景
+
+#### 1. 国产化替代
+
+使用 Vastbase 替代 PostgreSQL 或 Oracle：
+
+```
+用户: 查询用户表中的所有数据
+
+Claude 会:
+1. 查询用户表
+2. 返回结果
+3. 完全兼容 PostgreSQL 语法
+```
+
+#### 2. 企业级应用
+
+```
+用户: 查询订单表，需要关联多个表
+
+Claude 会:
+1. 生成复杂的 JOIN 查询
+2. 利用 Vastbase 的查询优化
+3. 返回结果
+```
+
+#### 3. 数据分析
+
+```
+用户: 分析最近一个月的销售趋势
+
+Claude 会:
+1. 生成聚合查询
+2. 按日期分组统计
+3. 生成趋势分析报告
+```
+
+#### 4. 高可用场景
+
+```
+用户: 连接 Vastbase 集群进行查询
+
+Claude 会:
+1. 连接到集群地址
+2. 自动负载均衡
+3. 保证高可用性
+```
+
+### Vastbase 特色功能
+
+Vastbase 作为国产数据库，有一些特色功能：
+
+- **PostgreSQL 兼容**: 兼容 PostgreSQL 协议和语法
+- **分布式架构**: 支持分布式部署和查询
+- **高可用**: 支持主备切换和故障转移
+- **数据加密**: 支持透明数据加密（TDE）
+- **审计日志**: 完善的审计日志功能
+- **国产化**: 支持国产操作系统和芯片
+
+**注意**: 这些特色功能可能需要特定的配置或 SQL 语法，Claude 会根据标准 PostgreSQL 语法生成查询。
+
+### Vastbase 最佳实践
+
+1. **表设计**:
+   - 使用合适的数据类型
+   - 合理设计主键和索引
+   - 使用分区表提升性能
+   - 避免过度规范化
+
+2. **查询优化**:
+   - 使用 EXPLAIN 分析查询计划
+   - 创建合适的索引
+   - 避免 SELECT *
+   - 使用 LIMIT 限制返回结果
+
+3. **连接管理**:
+   - 使用连接池
+   - 合理设置连接数
+   - 定期检查连接健康状态
+   - 避免长时间持有连接
+
+4. **监控维护**:
+   - 监控数据库性能指标
+   - 定期执行 VACUUM
+   - 更新统计信息
+   - 定期备份数据
+
+5. **安全建议**:
+   - 使用强密码
+   - 限制网络访问
+   - 启用 SSL 连接
+   - 定期审计日志
+
+---
+
+## HighGo 使用示例
+
+### 基础配置（只读模式）
+
+```json
+{
+  "mcpServers": {
+    "highgo-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "highgo",
+        "--host", "localhost",
+        "--port", "5866",
+        "--user", "highgo",
+        "--password", "your_password",
+        "--database", "highgo"
+      ]
+    }
+  }
+}
+```
+
+### 启用写入模式
+
+```json
+{
+  "mcpServers": {
+    "highgo-write": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "highgo",
+        "--host", "localhost",
+        "--port", "5866",
+        "--user", "highgo",
+        "--password", "your_password",
+        "--database", "mydb",
+        "--danger-allow-write"
+      ]
+    }
+  }
+}
+```
+
+### 连接 HighGo 集群
+
+```json
+{
+  "mcpServers": {
+    "highgo-cluster": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "highgo",
+        "--host", "highgo-cluster.example.com",
+        "--port", "5866",
+        "--user", "your_username",
+        "--password", "your_password",
+        "--database", "production"
+      ]
+    }
+  }
+}
+```
+
+### 与 Claude 对话示例
+
+**用户**: 查看数据库中有哪些表？
+
+**Claude 会自动**:
+1. 调用 `get_schema` 工具
+2. 查询 `information_schema.tables`
+3. 返回表列表
+
+**用户**: 查看 products 表的结构
+
+**Claude 会自动**:
+1. 调用 `get_table_info` 工具
+2. 查询 `information_schema.columns`
+3. 返回列信息、主键、索引等详细信息
+
+**用户**: 统计每个类别的商品数量
+
+**Claude 会自动**:
+1. 理解需求
+2. 生成 SQL: `SELECT category, COUNT(*) as product_count FROM products GROUP BY category ORDER BY product_count DESC`
+3. 执行并返回结果
+
+**用户**: 查找价格超过 1000 元的商品
+
+**Claude 会自动**:
+1. 生成 SQL: `SELECT * FROM products WHERE price > 1000 ORDER BY price DESC`
+2. 执行并返回结果
+
+### 注意事项
+
+1. **默认端口**: 5866（HighGo 默认端口）
+2. **兼容性**: 兼容 PostgreSQL 协议和大部分 SQL 语法
+3. **驱动**: 使用 PostgreSQL 的 `pg` 驱动
+4. **国产数据库**: 瀚高公司开发，支持国产化替代
+5. **企业级特性**:
+   - 支持高可用集群
+   - 支持数据加密
+   - 支持审计日志
+   - 支持备份恢复
+
+### 支持的版本
+
+- ✅ HighGo DB 4.x
+- ✅ HighGo DB 5.x
+- ✅ HighGo DB 6.x
+- ✅ 其他兼容 PostgreSQL 的版本
+
+### 常见使用场景
+
+#### 1. 国产化替代
+
+使用 HighGo 替代 PostgreSQL 或 Oracle：
+
+```
+用户: 查询订单表中的所有数据
+
+Claude 会:
+1. 查询订单表
+2. 返回结果
+3. 完全兼容 PostgreSQL 语法
+```
+
+#### 2. 企业级应用
+
+```
+用户: 查询销售数据，需要关联多个表
+
+Claude 会:
+1. 生成复杂的 JOIN 查询
+2. 利用 HighGo 的查询优化
+3. 返回结果
+```
+
+#### 3. 数据分析
+
+```
+用户: 分析最近一季度的销售趋势
+
+Claude 会:
+1. 生成聚合查询
+2. 按时间分组统计
+3. 生成趋势分析报告
+```
+
+#### 4. 高可用场景
+
+```
+用户: 连接 HighGo 集群进行查询
+
+Claude 会:
+1. 连接到集群地址
+2. 自动负载均衡
+3. 保证高可用性
+```
+
+### HighGo 特色功能
+
+HighGo 作为国产数据库，有一些特色功能：
+
+- **PostgreSQL 兼容**: 兼容 PostgreSQL 9.x/10.x/11.x 协议和语法
+- **高可用**: 支持主备切换和故障转移
+- **数据加密**: 支持透明数据加密（TDE）
+- **审计日志**: 完善的审计日志功能
+- **国产化**: 支持国产操作系统和芯片
+- **Oracle 兼容**: 部分版本支持 Oracle 兼容模式
+
+**注意**: 这些特色功能可能需要特定的配置或 SQL 语法，Claude 会根据标准 PostgreSQL 语法生成查询。
+
+### HighGo 最佳实践
+
+1. **表设计**:
+   - 使用合适的数据类型
+   - 合理设计主键和索引
+   - 使用分区表提升性能
+   - 避免过度规范化
+
+2. **查询优化**:
+   - 使用 EXPLAIN 分析查询计划
+   - 创建合适的索引
+   - 避免 SELECT *
+   - 使用 LIMIT 限制返回结果
+
+3. **连接管理**:
+   - 使用连接池
+   - 合理设置连接数
+   - 定期检查连接健康状态
+   - 避免长时间持有连接
+
+4. **监控维护**:
+   - 监控数据库性能指标
+   - 定期执行 VACUUM
+   - 更新统计信息
+   - 定期备份数据
+
+5. **安全建议**:
+   - 使用强密码
+   - 限制网络访问
+   - 启用 SSL 连接
+   - 定期审计日志
+
+---
+
+## GoldenDB 使用示例
+
+### 基础配置（只读模式）
+
+```json
+{
+  "mcpServers": {
+    "goldendb-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "goldendb",
+        "--host", "localhost",
+        "--port", "3306",
+        "--user", "root",
+        "--password", "your_password",
+        "--database", "test"
+      ]
+    }
+  }
+}
+```
+
+### 启用写入模式
+
+```json
+{
+  "mcpServers": {
+    "goldendb-write": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "goldendb",
+        "--host", "localhost",
+        "--port", "3306",
+        "--user", "root",
+        "--password", "your_password",
+        "--database", "mydb",
+        "--danger-allow-write"
+      ]
+    }
+  }
+}
+```
+
+### 连接 GoldenDB 分布式集群
+
+```json
+{
+  "mcpServers": {
+    "goldendb-cluster": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "goldendb",
+        "--host", "goldendb-cluster.example.com",
+        "--port", "3306",
+        "--user", "your_username",
+        "--password", "your_password",
+        "--database", "production"
+      ]
+    }
+  }
+}
+```
+
+### 与 Claude 对话示例
+
+**用户**: 查看数据库中有哪些表？
+
+**Claude 会自动**:
+1. 调用 `get_schema` 工具
+2. 执行 `SHOW TABLES` 查询
+3. 返回表列表
+
+**用户**: 查看 transactions 表的结构
+
+**Claude 会自动**:
+1. 调用 `get_table_info` 工具
+2. 执行 `SHOW FULL COLUMNS FROM transactions`
+3. 返回列信息、主键、索引等详细信息
+
+**用户**: 统计每个用户的交易总额
+
+**Claude 会自动**:
+1. 理解需求
+2. 生成 SQL: `SELECT user_id, SUM(amount) as total_amount FROM transactions GROUP BY user_id ORDER BY total_amount DESC`
+3. 执行并返回结果
+
+**用户**: 查找最近 24 小时的大额交易（金额超过 10000）
+
+**Claude 会自动**:
+1. 生成 SQL: `SELECT * FROM transactions WHERE amount > 10000 AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY amount DESC`
+2. 执行并返回结果
+
+### 注意事项
+
+1. **默认端口**: 3306（与 MySQL 相同）
+2. **兼容性**: 完全兼容 MySQL 5.7/8.0 协议
+3. **驱动**: 使用 MySQL 的 `mysql2` 驱动
+4. **国产数据库**: 中兴通讯开发，支持国产化替代
+5. **分布式特性**:
+   - 支持分布式事务
+   - 支持水平扩展
+   - 支持高可用集群
+   - 支持读写分离
+
+### 支持的版本
+
+- ✅ GoldenDB 2.x
+- ✅ GoldenDB 3.x
+- ✅ 其他兼容 MySQL 的版本
+
+### 常见使用场景
+
+#### 1. 电信行业应用
+
+GoldenDB 在电信行业有广泛应用：
+
+```
+用户: 查询用户通话记录
+
+Claude 会:
+1. 查询通话记录表
+2. 按用户分组统计
+3. 返回分析结果
+```
+
+#### 2. 金融交易系统
+
+```
+用户: 查询今日交易流水
+
+Claude 会:
+1. 查询交易表
+2. 过滤今日数据
+3. 返回交易明细
+```
+
+#### 3. 分布式场景
+
+```
+用户: 查询分布式表的数据
+
+Claude 会:
+1. 连接到 GoldenDB 集群
+2. 执行分布式查询
+3. 自动聚合结果
+```
+
+#### 4. 高并发场景
+
+```
+用户: 查询实时订单数据
+
+Claude 会:
+1. 利用 GoldenDB 的高并发能力
+2. 快速返回查询结果
+3. 保证数据一致性
+```
+
+### GoldenDB 特色功能
+
+GoldenDB 作为国产分布式数据库，有一些特色功能：
+
+- **MySQL 兼容**: 完全兼容 MySQL 5.7/8.0 协议和语法
+- **分布式架构**: 支持分布式事务和水平扩展
+- **高可用**: 支持主备切换和故障转移
+- **读写分离**: 支持读写分离架构
+- **弹性扩展**: 支持在线扩容和缩容
+- **国产化**: 支持国产操作系统和芯片
+- **电信级**: 满足电信级可靠性要求
+
+**注意**: 这些特色功能可能需要特定的配置或 SQL 语法，Claude 会根据标准 MySQL 语法生成查询。
+
+### GoldenDB 最佳实践
+
+1. **表设计**:
+   - 使用合适的分片键
+   - 合理设计主键和索引
+   - 考虑数据分布均衡
+   - 避免跨分片查询
+
+2. **查询优化**:
+   - 使用 EXPLAIN 分析查询计划
+   - 创建合适的索引
+   - 避免 SELECT *
+   - 使用 LIMIT 限制返回结果
+
+3. **分布式事务**:
+   - 合理使用分布式事务
+   - 避免长事务
+   - 注意事务隔离级别
+   - 处理分布式死锁
+
+4. **监控维护**:
+   - 监控集群状态
+   - 关注分片数据分布
+   - 定期检查慢查询
+   - 定期备份数据
+
+5. **安全建议**:
+   - 使用强密码
+   - 限制网络访问
+   - 启用 SSL 连接
+   - 定期审计日志
 
 ---
 

@@ -1,0 +1,54 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - MODE=http
+      - HTTP_PORT=3000
+      - HTTP_HOST=0.0.0.0
+      - API_KEYS=${API_KEYS:-default-key-change-me}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-1m}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_PRETTY=${LOG_PRETTY:-false}
+      # Database configuration (optional)
+      - DB_TYPE=${DB_TYPE}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_ALLOW_WRITE=${DB_ALLOW_WRITE:-false}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - db-network
+
+  # Example: MySQL database (optional)
+  # mysql:
+  #   image: mysql:8.0
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+  #     MYSQL_DATABASE: ${MYSQL_DATABASE:-testdb}
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - mysql-data:/var/lib/mysql
+  #   networks:
+  #     - db-network
+
+networks:
+  db-network:
+    driver: bridge
+
+# volumes:
+#   mysql-data:

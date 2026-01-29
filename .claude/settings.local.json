@@ -27,7 +27,12 @@
       "Bash(npm view mongodb@6.21.0 type)",
       "Bash(npm view mongodb@6.21.0 exports)",
       "Bash(npm view mongodb@5 version)",
-      "Bash(npm install @clickhouse/client)"
+      "Bash(npm install @clickhouse/client)",
+      "Bash(npm run --silent)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(npm install cross-env --save-dev)",
+      "Bash(dir:*)"
     ]
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "universal-db-mcp",
-  "version": "0.12.0",
-  "description": "MCP 数据库万能连接器 - 让 Claude Desktop 直接连接你的数据库",
+  "version": "1.0.0-plus",
+  "description": "MCP 数据库万能连接器 (增强版) - 支持多库切换、SSH 隧道与国产数据库",
   "main": "dist/index.js",
   "bin": {
     "universal-db-mcp": "dist/index.js"
@@ -10,8 +10,15 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "dev:http": "tsc && cross-env MODE=http node dist/index.js",
+    "dev:mcp": "tsc && cross-env MODE=mcp node dist/index.js",
     "prepare": "npm run build",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "start:http": "cross-env MODE=http node dist/index.js",
+    "start:mcp": "cross-env MODE=mcp node dist/index.js",
+    "test": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
   },
   "keywords": [
     "mcp",
@@ -41,6 +48,12 @@
     "olap",
     "polardb",
     "阿里云",
+    "vastbase",
+    "海量数据",
+    "highgo",
+    "瀚高",
+    "goldendb",
+    "中兴",
     "列式数据库",
     "蚂蚁金服",
     "华为高斯",
@@ -64,24 +77,36 @@
   ],
   "dependencies": {
     "@clickhouse/client": "^1.16.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/rate-limit": "^9.1.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "better-sqlite3": "^11.8.1",
     "commander": "^12.1.0",
+    "dotenv": "^16.4.1",
+    "fastify": "^4.26.0",
     "ioredis": "^5.4.2",
+    "js-yaml": "^4.1.1",
     "mongodb": "^5.9.2",
     "mssql": "^12.2.0",
     "mysql2": "^3.11.5",
+    "nanoid": "^5.0.4",
     "oracledb": "^6.7.0",
     "pg": "^8.13.1",
+    "ssh2": "^1.17.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
+    "@types/js-yaml": "^4.0.9",
     "@types/mssql": "^9.1.5",
     "@types/node": "^22.10.5",
     "@types/oracledb": "^6.5.1",
     "@types/pg": "^8.11.10",
-    "typescript": "^5.7.3"
+    "@types/ssh2": "^1.15.5",
+    "@vitest/ui": "^1.2.0",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.7.3",
+    "vitest": "^1.2.0"
   },
   "optionalDependencies": {
     "dmdb": "^1.0.46190"

@@ -1,0 +1,24 @@
+{
+  "mode": "mcp",
+  "http": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "apiKeys": [],
+    "cors": {
+      "origins": "*",
+      "credentials": false
+    },
+    "rateLimit": {
+      "max": 100,
+      "window": "1m"
+    },
+    "logging": {
+      "level": "info",
+      "pretty": false
+    },
+    "session": {
+      "timeout": 3600000,
+      "cleanupInterval": 300000
+    }
+  }
+}
