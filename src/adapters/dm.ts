@@ -237,11 +237,9 @@ export class DMAdapter implements DbAdapter {
         []
       );
 
-      // 批量获取所有表的行数估算
+      // 批量获取所有表的行数估算（不过滤临时表，达梦的 TEMPORARY 字段可能不同）
       const allStatsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, NUM_ROWS
-         FROM USER_TABLES
-         WHERE TEMPORARY = 'N'`,
+        `SELECT TABLE_NAME, NUM_ROWS FROM USER_TABLES`,
         []
       );
 
@@ -406,15 +404,10 @@ export class DMAdapter implements DbAdapter {
       }
     }
 
-    // 组装表信息
+    // 组装表信息（基于列信息构建，不依赖 USER_TABLES 的结果）
     const tableInfos: TableInfo[] = [];
 
     for (const [tableName, columns] of columnsByTable.entries()) {
-      // 只包含在 allStats 中的表（排除临时表等）
-      if (!rowsByTable.has(tableName)) {
-        continue;
-      }
-
       const tableIndexes = indexesByTable.get(tableName);
       const indexInfos: IndexInfo[] = [];
 

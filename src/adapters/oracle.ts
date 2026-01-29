@@ -396,15 +396,10 @@ export class OracleAdapter implements DbAdapter {
       }
     }
 
-    // 组装表信息
+    // 组装表信息（基于列信息构建，不依赖 ALL_TABLES 的结果）
     const tableInfos: TableInfo[] = [];
 
     for (const [tableName, columns] of columnsByTable.entries()) {
-      // 只包含在 allStats 中的表（排除临时表等）
-      if (!rowsByTable.has(tableName)) {
-        continue;
-      }
-
       const tableIndexes = indexesByTable.get(tableName);
       const indexInfos: IndexInfo[] = [];
 
