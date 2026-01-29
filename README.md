@@ -2,8 +2,11 @@
 
 > **增强版特性**：原生支持多数据库动态切换、生产级 Schema 性能优化、SSH 隧道直连以及国产数据库适配。让 Claude Desktop 直接连接并管理您的整个数据基础设施。
 
-[![npm version](https://img.shields.io/npm/v/universal-db-mcp-plus-plus.svg)](https://www.npmjs.com/package/universal-db-mcp-plus-plus)
+[![npm version](https://img.shields.io/npm/v/universal-db-mcp-plus.svg)](https://www.npmjs.com/package/universal-db-mcp-plus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **关于本项目**：
+> 本仓库 (`ppanphper/universal-db-mcp`) 是基于社区版 [universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp) 独立维护的增强版本，专注于国产数据库适配与企业级功能增强。
 
 ## 🌟 核心增强特性 (Vs Community)
 
@@ -918,6 +921,7 @@ MIT License - 自由使用，欢迎 Star ⭐
 
 ## 🙏 致谢
 
+- [Original universal-db-mcp](https://github.com/ppanphper/universal-db-mcp) - 感谢原社区版提供的坚实基础
 - [Model Context Protocol](https://modelcontextprotocol.io/) - Anthropic 提供的强大协议
 - 所有贡献者和使用者
 
