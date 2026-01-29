@@ -261,6 +261,127 @@ npx universal-db-mcp
 - 支持一写多读架构，读写分离
 - 使用与 MySQL 相同的驱动（mysql2）
 
+### 🆕 多数据库配置（推荐）
+
+对于需要管理多个数据库的场景，推荐使用 JSON 配置文件：
+
+**1. 创建配置文件** `databases.json`：
+
+```json
+{
+  "databases": [
+    {
+      "name": "mysql-production",
+      "type": "mysql",
+      "host": "localhost",
+      "port": 3306,
+      "user": "root",
+      "password": "${DB_MYSQL_PASSWORD}",
+      "database": "production",
+      "description": "生产 MySQL",
+      "isDefault": true
+    },
+    {
+      "name": "postgres-analytics",
+      "type": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "user": "postgres",
+      "password": "${DB_PG_PASSWORD}",
+      "database": "analytics",
+      "description": "分析 PostgreSQL"
+    },
+    {
+      "name": "redis-cache",
+      "type": "redis",
+      "host": "localhost",
+      "port": 6379,
+      "description": "缓存 Redis"
+    }
+  ],
+  "settings": {
+    "allowWrite": false,
+    "ddlWhitelist": []
+  }
+}
+```
+
+**2. 配置 Claude Desktop**：
+
+```json
+{
+  "mcpServers": {
+    "universal-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--config", "/path/to/databases.json"
+      ],
+      "env": {
+        "DB_MYSQL_PASSWORD": "your_mysql_password",
+        "DB_PG_PASSWORD": "your_postgres_password"
+      }
+    }
+  }
+}
+```
+
+**3. 使用环境变量**：
+
+配置文件支持 `${ENV_VAR}` 格式的环境变量引用，敏感信息（如密码）可以通过环境变量传入，避免明文存储。
+
+**4. 动态切换数据库**：
+
+在对话中可以使用以下命令：
+- "列出所有数据库" → 调用 `list_databases`
+- "切换到 postgres-analytics" → 调用 `switch_database`
+- "检查所有数据库健康状态" → 调用 `health_check`
+
+### 🆕 YAML 配置支持（推荐）
+
+除了 JSON，还支持使用 YAML 格式的配置文件（`.yaml` 或 `.yml`），YAML 更易读且支持注释：
+
+```yaml
+# databases.yaml - 带注释的配置示例
+databases:
+  # MySQL 生产数据库
+  - name: mysql-production
+    type: mysql
+    host: localhost
+    port: 3306
+    user: root
+    password: "${DB_MYSQL_PASSWORD}"  # 使用环境变量
+    database: production
+    description: 生产 MySQL
+    isDefault: true
+
+  # 通过 SSH 隧道连接
+  - name: mysql-via-ssh
+    type: mysql
+    host: 127.0.0.1
+    port: 3306
+    user: app_user
+    password: "${DB_APP_PASSWORD}"
+    ssh:
+      enabled: true
+      host: bastion.example.com
+      username: deploy
+      privateKey: ~/.ssh/id_rsa
+
+settings:
+  allowWrite: false  # 安全模式
+```
+
+**使用方式**：
+```bash
+npx universal-db-mcp --config ./databases.yaml
+```
+
+**自动检测**：如果不指定 `--config`，程序会按以下顺序自动检测：
+1. `databases.json`
+2. `databases.yaml`
+3. `databases.yml`
+
 ### 启动使用
 
 1. 重启 Claude Desktop
@@ -270,6 +391,52 @@ npx universal-db-mcp
    - "找出消费金额最高的 10 个用户"
 
 Claude 会自动调用数据库工具完成查询！
+
+### 🔐 SSH 隧道支持
+
+Universal DB MCP 支持通过 SSH 隧道连接远程数据库，适用于数据库位于防火墙内或只允许本地连接（127.0.0.1）的场景。
+
+**CLI 方式**：
+
+```bash
+npx universal-db-mcp \
+  --type mysql \
+  --host 127.0.0.1 \
+  --port 3306 \
+  --user root \
+  --password mypassword \
+  --ssh-host 1.2.3.4 \
+  --ssh-port 22 \
+  --ssh-user myuser \
+  --ssh-key ~/.ssh/id_rsa
+```
+
+**JSON 配置方式**：
+
+```json
+{
+  "name": "prod-mysql-via-ssh",
+  "type": "mysql",
+  "host": "localhost",
+  "port": 3306,
+  "user": "root",
+  "password": "${DB_PASSWORD}",
+  "database": "production",
+  "ssh": {
+    "enabled": true,
+    "host": "bastion-host.example.com",
+    "port": 22,
+    "username": "op_user",
+    "privateKey": "/path/to/id_rsa"
+  }
+}
+```
+
+支持的 SSH 认证方式：
+- 私钥文件 (`privateKey`)
+- 密码 (`password`)
+- 私钥内容 (`privateKeyContent`)
+- 私钥密码 (`passphrase`)
 
 ## 🛡️ 安全模式
 
@@ -319,6 +486,7 @@ Claude 会自动调用数据库工具完成查询！
 universal-db-mcp [选项]
 
 选项：
+  --config <path>          多数据库 JSON 配置文件路径（推荐）
   --type <db>              数据库类型 (mysql|postgres|redis|oracle|dm|sqlserver|mssql|mongodb|sqlite|kingbase|gaussdb|opengauss|oceanbase|tidb|clickhouse|polardb)
   --host <host>            数据库主机地址 (默认: localhost)
   --port <port>            数据库端口
@@ -328,7 +496,69 @@ universal-db-mcp [选项]
   --file <file>            SQLite 数据库文件路径
   --danger-allow-write     启用写入模式（危险！）
   --help                   显示帮助信息
+
+环境变量：
+  DB_CONFIG_PATH           配置文件路径（替代 --config）
+  DB_HOST                  数据库主机（替代 --host）
+  DB_PORT                  数据库端口（替代 --port）
+  DB_USER                  用户名（替代 --user）
+  DB_PASSWORD              密码（替代 --password）
+  DB_PASSWORD              密码（替代 --password）
+  DB_DATABASE              数据库名（替代 --database）
+
+SSH 选项：
+  --ssh-host <host>       SSH 跳板机主机地址
+  --ssh-port <port>       SSH 端口 (默认: 22)
+  --ssh-user <user>       SSH 用户名
+  --ssh-password <pwd>    SSH 密码
+  --ssh-key <path>        SSH 私钥路径
+  --ssh-passphrase <pass> SSH 私钥密码
 ```
+
+## 🛠️ MCP 工具列表
+
+本项目提供以下 MCP 工具供 Claude 调用：
+
+### 基础查询工具
+
+| 工具 | 描述 |
+|------|------|
+| `execute_query` | 执行 SQL 查询或数据库命令 |
+| `get_schema` | 获取数据库结构信息 |
+| `get_table_info` | 获取指定表的详细信息 |
+
+### 查询增强工具
+
+| 工具 | 描述 |
+|------|------|
+| `query_single` | 执行查询返回单条记录 |
+| `get_scalar` | 获取标量值（COUNT、SUM 等） |
+| `batch_execute` | 批量执行多条 SQL |
+
+### 连接管理工具
+
+| 工具 | 描述 |
+|------|------|
+| `list_databases` | 列出所有已配置的数据库 |
+| `switch_database` | 切换到指定数据库 |
+| `get_current_database` | 获取当前活动数据库 |
+| `test_connection` | 测试数据库连接 |
+| `health_check` | 所有数据库健康检查 |
+
+### 事务管理工具
+
+| 工具 | 描述 |
+|------|------|
+| `begin_transaction` | 开始事务（仅 MySQL/PostgreSQL） |
+| `commit_transaction` | 提交事务 |
+| `rollback_transaction` | 回滚事务 |
+
+### SSH 管理工具
+
+| 工具 | 描述 |
+|------|------|
+| `list_tunnels` | 列出所有活动的 SSH 隧道 |
+| `get_tunnel_status` | 获取指定连接的 SSH 隧道详情 |
 
 ## 🏗️ 架构设计
 

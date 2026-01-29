@@ -132,11 +132,12 @@ export class KingbaseAdapter implements DbAdapter {
 
       const tableInfos: TableInfo[] = [];
 
-      for (const row of tablesResult.rows) {
-        const tableName = row.table_name;
-        const tableInfo = await this.getTableInfo(tableName);
-        tableInfos.push(tableInfo);
-      }
+      // 并行获取所有表的详细信息
+      const tableNames = tablesResult.rows.map(row => row.table_name);
+      const tableInfoResults = await Promise.all(
+        tableNames.map(tableName => this.getTableInfo(tableName))
+      );
+      tableInfos.push(...tableInfoResults);
 
       return {
         databaseType: 'kingbase',

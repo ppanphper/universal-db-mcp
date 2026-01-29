@@ -194,11 +194,12 @@ export class SQLServerAdapter implements DbAdapter {
       const tableInfos: TableInfo[] = [];
 
       if (tablesResult.recordset) {
-        for (const tableRow of tablesResult.recordset) {
-          const tableName = tableRow.TABLE_NAME;
-          const tableInfo = await this.getTableInfo(tableName);
-          tableInfos.push(tableInfo);
-        }
+        // 并行获取所有表的详细信息，提升性能
+        const tableNames = tablesResult.recordset.map(row => row.TABLE_NAME);
+        const tableInfoResults = await Promise.all(
+          tableNames.map(tableName => this.getTableInfo(tableName))
+        );
+        tableInfos.push(...tableInfoResults);
       }
 
       return {
@@ -400,9 +401,9 @@ export class SQLServerAdapter implements DbAdapter {
 
     // 事务控制语句
     if (trimmedQuery.startsWith('BEGIN TRANSACTION') ||
-        trimmedQuery.startsWith('BEGIN TRAN') ||
-        trimmedQuery.startsWith('COMMIT') ||
-        trimmedQuery.startsWith('ROLLBACK')) {
+      trimmedQuery.startsWith('BEGIN TRAN') ||
+      trimmedQuery.startsWith('COMMIT') ||
+      trimmedQuery.startsWith('ROLLBACK')) {
       return true;
     }
 

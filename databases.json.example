@@ -1,0 +1,56 @@
+{
+  "databases": [
+    {
+      "name": "mysql-main",
+      "type": "mysql",
+      "host": "localhost",
+      "port": 3306,
+      "user": "root",
+      "password": "${DB_MYSQL_PASSWORD}",
+      "database": "myapp",
+      "description": "MySQL 主库",
+      "isDefault": true
+    },
+    {
+      "name": "postgres-analytics",
+      "type": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "user": "postgres",
+      "password": "${DB_PG_PASSWORD}",
+      "database": "analytics",
+      "description": "PostgreSQL 分析库"
+    },
+    {
+      "name": "redis-cache",
+      "type": "redis",
+      "host": "localhost",
+      "port": 6379,
+      "password": "${DB_REDIS_PASSWORD}",
+      "database": "0",
+      "description": "Redis 缓存"
+    },
+    {
+      "name": "mongodb-logs",
+      "type": "mongodb",
+      "host": "localhost",
+      "port": 27017,
+      "user": "admin",
+      "password": "${DB_MONGO_PASSWORD}",
+      "database": "logs",
+      "authSource": "admin",
+      "description": "MongoDB 日志库"
+    },
+    {
+      "name": "sqlite-local",
+      "type": "sqlite",
+      "filePath": "./data/local.db",
+      "description": "SQLite 本地数据库"
+    }
+  ],
+  "settings": {
+    "allowWrite": false,
+    "ddlWhitelist": [],
+    "logLevel": "info"
+  }
+}

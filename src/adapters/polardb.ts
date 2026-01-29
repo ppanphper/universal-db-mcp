@@ -135,11 +135,12 @@ export class PolarDBAdapter implements DbAdapter {
 
       const tableInfos: TableInfo[] = [];
 
-      for (const tableRow of tables) {
-        const tableName = Object.values(tableRow)[0] as string;
-        const tableInfo = await this.getTableInfo(tableName);
-        tableInfos.push(tableInfo);
-      }
+      // 并行获取所有表的详细信息
+      const tableNames = tables.map(tableRow => Object.values(tableRow)[0] as string);
+      const tableInfoResults = await Promise.all(
+        tableNames.map(tableName => this.getTableInfo(tableName))
+      );
+      tableInfos.push(...tableInfoResults);
 
       return {
         databaseType: 'polardb',

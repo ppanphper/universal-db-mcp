@@ -207,11 +207,12 @@ export class OracleAdapter implements DbAdapter {
       const tableInfos: TableInfo[] = [];
 
       if (tablesResult.rows) {
-        for (const tableRow of tablesResult.rows) {
-          const tableName = (tableRow as any).TABLE_NAME;
-          const tableInfo = await this.getTableInfo(tableName);
-          tableInfos.push(tableInfo);
-        }
+        // 并行获取所有表的详细信息，提升性能
+        const tableNames = tablesResult.rows.map(row => (row as any).TABLE_NAME);
+        const tableInfoResults = await Promise.all(
+          tableNames.map(tableName => this.getTableInfo(tableName))
+        );
+        tableInfos.push(...tableInfoResults);
       }
 
       return {

@@ -156,10 +156,11 @@ export class ClickHouseAdapter implements DbAdapter {
       const tables = Array.isArray(tablesData) ? tablesData : [];
       const tableInfos: TableInfo[] = [];
 
-      for (const table of tables) {
-        const tableInfo = await this.getTableInfo(table?.name);
-        tableInfos.push(tableInfo);
-      }
+      // 并行获取所有表的详细信息
+      const tableInfoResults = await Promise.all(
+        tables.map(table => this.getTableInfo(table?.name))
+      );
+      tableInfos.push(...tableInfoResults);
 
       return {
         databaseType: 'clickhouse',
