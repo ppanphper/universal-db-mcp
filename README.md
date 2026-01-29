@@ -921,7 +921,7 @@ MIT License - 自由使用，欢迎 Star ⭐
 
 ## 🙏 致谢
 
-- [Original universal-db-mcp](https://github.com/ppanphper/universal-db-mcp) - 感谢原社区版提供的坚实基础
+- [Original universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp) - 感谢原社区版提供的坚实基础
 - [Model Context Protocol](https://modelcontextprotocol.io/) - Anthropic 提供的强大协议
 - 所有贡献者和使用者
 
