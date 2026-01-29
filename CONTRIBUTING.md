@@ -19,14 +19,12 @@
 
 ### 提交代码
 
-> **注意**：本项目作为独立增强版维护，请直接向本仓库 (`Anarkh-Lee/universal-db-mcp`) 提交 Pull Request，**不要**提交到上游社区版仓库。
-
 1. **Fork 本仓库**
 2. **创建特性分支**: `git checkout -b feature/amazing-feature`
 3. **编写代码**: 遵循下面的代码规范
 4. **提交更改**: `git commit -m '添加某某功能'`
 5. **推送分支**: `git push origin feature/amazing-feature`
-6. **创建 Pull Request**: 确保 Base Repository 选择为 `Anarkh-Lee/universal-db-mcp`
+6. **创建 Pull Request**
 
 ## 📝 代码规范
 
