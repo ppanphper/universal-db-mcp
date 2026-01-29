@@ -137,7 +137,7 @@ export class MySQLAdapter implements DbAdapter {
       let tableQuery = `
         SELECT TABLE_NAME, TABLE_ROWS, TABLE_COMMENT 
         FROM information_schema.TABLES 
-        WHERE TABLE_SCHEMA = ?
+        WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'
       `;
       const tableParams: any[] = [databaseName];
 
