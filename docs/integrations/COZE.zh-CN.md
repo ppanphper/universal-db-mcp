@@ -21,13 +21,13 @@ Coze 是一个 AI 机器人开发平台。通过集成 Universal Database MCP Se
 ```bash
 # 使用 Docker
 docker run -d \
-  --name universal-db-mcp \
+  --name universal-db-mcp-plus \
   -p 3000:3000 \
   -e MODE=http \
   -e HTTP_PORT=3000 \
   -e API_KEYS=coze-secret-key \
   -e CORS_ORIGINS=* \
-  universal-db-mcp:latest
+  universal-db-mcp-plus:latest
 ```
 
 或部署到云平台（Railway、Render、Fly.io）。参见[部署指南](../http-api/DEPLOYMENT.zh-CN.md)。
@@ -490,5 +490,5 @@ if (isWriteOperation(query) && !allowWrite) {
 ## 支持
 
 如有集成问题：
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 - Coze 社区: https://www.coze.com/community

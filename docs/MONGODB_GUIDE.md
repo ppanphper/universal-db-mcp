@@ -25,7 +25,7 @@
 ### 安装
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 ```
 
 ### 基础配置
@@ -43,7 +43,7 @@ npm install -g universal-db-mcp
     "mongodb": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "localhost",
         "--port", "27017",
@@ -72,7 +72,7 @@ npm install -g universal-db-mcp
     "mongodb-local": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "localhost",
         "--port", "27017",
@@ -91,7 +91,7 @@ npm install -g universal-db-mcp
     "mongodb-auth": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "localhost",
         "--port", "27017",
@@ -116,7 +116,7 @@ MongoDB Atlas 是 MongoDB 的云服务：
     "mongodb-atlas": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "cluster0.xxxxx.mongodb.net",
         "--port", "27017",
@@ -142,7 +142,7 @@ MongoDB Atlas 是 MongoDB 的云服务：
     "mongodb-replica": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "replica-primary.example.com",
         "--port", "27017",
@@ -668,7 +668,7 @@ A: 当前版本不支持事务。事务支持将在未来版本添加。
 - [MongoDB 官方文档](https://docs.mongodb.com/)
 - [MongoDB 查询语法](https://docs.mongodb.com/manual/tutorial/query-documents/)
 - [聚合管道](https://docs.mongodb.com/manual/core/aggregation-pipeline/)
-- [项目 GitHub](https://github.com/Anarkh-Lee/universal-db-mcp)
+- [项目 GitHub](https://github.com/Anarkh-Lee/universal-db-mcp-plus)
 
 ---
 

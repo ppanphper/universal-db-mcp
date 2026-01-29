@@ -46,7 +46,7 @@
 
 ```bash
 # 安装
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 
 # 配置 Claude Desktop
 # 编辑 claude_desktop_config.json
@@ -55,7 +55,7 @@ npm install -g universal-db-mcp
     "mysql-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "localhost",
         "--port", "3306",
@@ -94,7 +94,7 @@ docker-compose up -d
 docker run -p 3000:3000 \
   -e MODE=http \
   -e API_KEYS=your-key \
-  universal-db-mcp
+  universal-db-mcp-plus
 ```
 
 ## 🎯 支持的数据库
@@ -168,8 +168,8 @@ docker run -p 3000:3000 \
 - [完成报告](../COMPLETION_REPORT.md) - 项目完成状态
 
 ### 支持渠道
-- **GitHub Issues**: https://github.com/Anarkh-Lee/universal-db-mcp/issues
-- **项目主页**: https://github.com/Anarkh-Lee/universal-db-mcp
+- **GitHub Issues**: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
+- **项目主页**: https://github.com/Anarkh-Lee/universal-db-mcp-plus
 
 ## 🤝 贡献
 

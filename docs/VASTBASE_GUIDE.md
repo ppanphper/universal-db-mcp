@@ -64,7 +64,7 @@ docker run -d --name vastbase-server \
     "vastbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "vastbase",
         "--host", "localhost",
         "--port", "5432",
@@ -85,7 +85,7 @@ docker run -d --name vastbase-server \
     "vastbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--danger-allow-write",
         "--type", "vastbase",
         "--host", "localhost",
@@ -107,7 +107,7 @@ docker run -d --name vastbase-server \
     "vastbase-cluster": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "vastbase",
         "--host", "vastbase-cluster.example.com",
         "--port", "5432",
@@ -322,7 +322,7 @@ COPY users (name, email) FROM '/path/to/data.csv' CSV;
 ```json
 {
   "args": [
-    "universal-db-mcp",
+    "universal-db-mcp-plus",
     "--type", "vastbase",
     "--host", "localhost",
     "--port", "5432",

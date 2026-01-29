@@ -36,7 +36,7 @@
     "mysql-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "localhost",
         "--port", "3306",
@@ -57,7 +57,7 @@
     "mysql-dev": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "localhost",
         "--port", "3306",
@@ -99,7 +99,7 @@
     "postgres-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "postgres",
         "--host", "localhost",
         "--port", "5432",
@@ -120,7 +120,7 @@
     "postgres-prod": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "postgres",
         "--host", "db.example.com",
         "--port", "5432",
@@ -154,7 +154,7 @@
     "redis-cache": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "redis",
         "--host", "localhost",
         "--port", "6379"
@@ -172,7 +172,7 @@
     "redis-session": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "redis",
         "--host", "localhost",
         "--port", "6379",
@@ -206,7 +206,7 @@
     "oracle-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oracle",
         "--host", "localhost",
         "--port", "1521",
@@ -227,7 +227,7 @@
     "oracle-prod": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oracle",
         "--host", "oracle-server.example.com",
         "--port", "1521",
@@ -248,7 +248,7 @@
     "oracle-dev": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oracle",
         "--host", "localhost",
         "--port", "1521",
@@ -298,7 +298,7 @@
     "dm-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "dm",
         "--host", "localhost",
         "--port", "5236",
@@ -325,7 +325,7 @@ npm install -g dmdb
     "dm-prod": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "dm",
         "--host", "dm-server.example.com",
         "--port", "5236",
@@ -374,7 +374,7 @@ npm install -g dmdb
     "sqlserver-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlserver",
         "--host", "localhost",
         "--port", "1433",
@@ -397,7 +397,7 @@ npm install -g dmdb
     "sqlserver-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlserver",
         "--host", "localhost",
         "--port", "1433",
@@ -419,7 +419,7 @@ npm install -g dmdb
     "azure-sql": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlserver",
         "--host", "myserver.database.windows.net",
         "--port", "1433",
@@ -487,7 +487,7 @@ npm install -g dmdb
     "mongodb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "localhost",
         "--port", "27017",
@@ -509,7 +509,7 @@ npm install -g dmdb
     "mongodb-local": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "localhost",
         "--port", "27017",
@@ -528,7 +528,7 @@ npm install -g dmdb
     "mongodb-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "localhost",
         "--port", "27017",
@@ -550,7 +550,7 @@ npm install -g dmdb
     "mongodb-atlas": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mongodb",
         "--host", "cluster0.xxxxx.mongodb.net",
         "--port", "27017",
@@ -668,7 +668,7 @@ db.users.find({"age": {"$gt": 18}})
     "sqlite-local": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlite",
         "--file", "/path/to/your/database.db"
       ]
@@ -685,7 +685,7 @@ db.users.find({"age": {"$gt": 18}})
     "sqlite-app": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlite",
         "--file", "C:\\Users\\YourName\\Documents\\myapp.db"
       ]
@@ -704,7 +704,7 @@ db.users.find({"age": {"$gt": 18}})
     "sqlite-notes": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlite",
         "--file", "/Users/YourName/Documents/notes.db"
       ]
@@ -721,7 +721,7 @@ db.users.find({"age": {"$gt": 18}})
     "sqlite-dev": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlite",
         "--file", "/path/to/dev.db",
         "--danger-allow-write"
@@ -836,7 +836,7 @@ Claude 会:
     "kingbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "kingbase",
         "--host", "localhost",
         "--port", "54321",
@@ -857,7 +857,7 @@ Claude 会:
     "kingbase-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "kingbase",
         "--host", "localhost",
         "--port", "54321",
@@ -879,7 +879,7 @@ Claude 会:
     "kingbase-prod": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "kingbase",
         "--host", "kingbase.example.com",
         "--port", "54321",
@@ -983,7 +983,7 @@ Claude 会（在写入模式下）:
     "gaussdb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "gaussdb",
         "--host", "localhost",
         "--port", "5432",
@@ -1006,7 +1006,7 @@ Claude 会（在写入模式下）:
     "gaussdb-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "gaussdb",
         "--host", "localhost",
         "--port", "5432",
@@ -1028,7 +1028,7 @@ Claude 会（在写入模式下）:
     "gaussdb-cloud": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "gaussdb",
         "--host", "gaussdb.cn-north-4.myhuaweicloud.com",
         "--port", "5432",
@@ -1158,7 +1158,7 @@ Claude 会:
     "oceanbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oceanbase",
         "--host", "localhost",
         "--port", "2881",
@@ -1179,7 +1179,7 @@ Claude 会:
     "oceanbase-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oceanbase",
         "--host", "localhost",
         "--port", "2881",
@@ -1201,7 +1201,7 @@ Claude 会:
     "oceanbase-cloud": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oceanbase",
         "--host", "oceanbase.cn-hangzhou.aliyuncs.com",
         "--port", "2883",
@@ -1331,7 +1331,7 @@ Claude 会:
     "tidb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "tidb",
         "--host", "localhost",
         "--port", "4000",
@@ -1352,7 +1352,7 @@ Claude 会:
     "tidb-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "tidb",
         "--host", "localhost",
         "--port", "4000",
@@ -1374,7 +1374,7 @@ Claude 会:
     "tidb-cloud": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "tidb",
         "--host", "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",
         "--port", "4000",
@@ -1506,7 +1506,7 @@ Claude 会:
     "clickhouse-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "clickhouse",
         "--host", "localhost",
         "--port", "8123",
@@ -1527,7 +1527,7 @@ Claude 会:
     "clickhouse-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "clickhouse",
         "--host", "localhost",
         "--port", "8123",
@@ -1549,7 +1549,7 @@ Claude 会:
     "clickhouse-cloud": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "clickhouse",
         "--host", "your-instance.clickhouse.cloud",
         "--port", "8443",
@@ -1708,7 +1708,7 @@ ClickHouse 作为列式 OLAP 数据库，有许多特色功能：
     "polardb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "polardb",
         "--host", "pc-xxxxx.mysql.polardb.rds.aliyuncs.com",
         "--port", "3306",
@@ -1729,7 +1729,7 @@ ClickHouse 作为列式 OLAP 数据库，有许多特色功能：
     "polardb-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "polardb",
         "--host", "pc-xxxxx.mysql.polardb.rds.aliyuncs.com",
         "--port", "3306",
@@ -1751,7 +1751,7 @@ ClickHouse 作为列式 OLAP 数据库，有许多特色功能：
     "polardb-primary": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "polardb",
         "--host", "pc-xxxxx.mysql.polardb.rds.aliyuncs.com",
         "--port", "3306",
@@ -1764,7 +1764,7 @@ ClickHouse 作为列式 OLAP 数据库，有许多特色功能：
     "polardb-readonly": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "polardb",
         "--host", "pc-xxxxx-ro.mysql.polardb.rds.aliyuncs.com",
         "--port", "3306",
@@ -1931,7 +1931,7 @@ PolarDB 作为云原生数据库，有许多特色功能：
     "vastbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "vastbase",
         "--host", "localhost",
         "--port", "5432",
@@ -1952,7 +1952,7 @@ PolarDB 作为云原生数据库，有许多特色功能：
     "vastbase-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "vastbase",
         "--host", "localhost",
         "--port", "5432",
@@ -1974,7 +1974,7 @@ PolarDB 作为云原生数据库，有许多特色功能：
     "vastbase-cluster": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "vastbase",
         "--host", "vastbase-cluster.example.com",
         "--port", "5432",
@@ -2139,7 +2139,7 @@ Vastbase 作为国产数据库，有一些特色功能：
     "highgo-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "highgo",
         "--host", "localhost",
         "--port", "5866",
@@ -2160,7 +2160,7 @@ Vastbase 作为国产数据库，有一些特色功能：
     "highgo-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "highgo",
         "--host", "localhost",
         "--port", "5866",
@@ -2182,7 +2182,7 @@ Vastbase 作为国产数据库，有一些特色功能：
     "highgo-cluster": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "highgo",
         "--host", "highgo-cluster.example.com",
         "--port", "5866",
@@ -2348,7 +2348,7 @@ HighGo 作为国产数据库，有一些特色功能：
     "goldendb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "goldendb",
         "--host", "localhost",
         "--port", "3306",
@@ -2369,7 +2369,7 @@ HighGo 作为国产数据库，有一些特色功能：
     "goldendb-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "goldendb",
         "--host", "localhost",
         "--port", "3306",
@@ -2391,7 +2391,7 @@ HighGo 作为国产数据库，有一些特色功能：
     "goldendb-cluster": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "goldendb",
         "--host", "goldendb-cluster.example.com",
         "--port", "3306",
@@ -2559,7 +2559,7 @@ GoldenDB 作为国产分布式数据库，有一些特色功能：
     "mysql-prod": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "prod-db.example.com",
         "--port", "3306",
@@ -2571,7 +2571,7 @@ GoldenDB 作为国产分布式数据库，有一些特色功能：
     "postgres-analytics": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "postgres",
         "--host", "analytics.example.com",
         "--port", "5432",
@@ -2583,7 +2583,7 @@ GoldenDB 作为国产分布式数据库，有一些特色功能：
     "redis-cache": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "redis",
         "--host", "cache.example.com",
         "--port", "6379",
@@ -2593,7 +2593,7 @@ GoldenDB 作为国产分布式数据库，有一些特色功能：
     "oracle-warehouse": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "oracle",
         "--host", "oracle.example.com",
         "--port", "1521",
@@ -2605,7 +2605,7 @@ GoldenDB 作为国产分布式数据库，有一些特色功能：
     "sqlite-local": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "sqlite",
         "--file", "/Users/yourname/data/local.db"
       ]
@@ -2613,7 +2613,7 @@ GoldenDB 作为国产分布式数据库，有一些特色功能：
     "kingbase-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "kingbase",
         "--host", "localhost",
         "--port", "54321",
@@ -2625,7 +2625,7 @@ GoldenDB 作为国产分布式数据库，有一些特色功能：
     "gaussdb-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "gaussdb",
         "--host", "localhost",
         "--port", "5432",
@@ -2773,4 +2773,4 @@ Claude 会:
 
 - 查看 [README.md](./README.md) 了解项目概述
 - 查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解如何贡献
-- 提交 Issue: https://github.com/yourusername/universal-db-mcp/issues
+- 提交 Issue: https://github.com/yourusername/universal-db-mcp-plus/issues

@@ -1,8 +1,8 @@
 component: scf
-name: universal-db-mcp
+name: universal-db-mcp-plus
 
 inputs:
-  name: universal-db-mcp-api
+  name: universal-db-mcp-plus-api
   src: ./
   handler: index.handler
   runtime: Nodejs20.15
@@ -26,7 +26,7 @@ inputs:
 
   events:
     - apigw:
-        name: universal-db-mcp-apigw
+        name: universal-db-mcp-plus-apigw
         parameters:
           protocols:
             - http
@@ -34,20 +34,20 @@ inputs:
           environment: release
           netTypes:
             - OUTER
-          serviceName: universal-db-mcp-service
+          serviceName: universal-db-mcp-plus-service
           description: Universal Database MCP API Gateway
           endpoints:
             - path: /
               method: ANY
               function:
-                functionName: universal-db-mcp-api
+                functionName: universal-db-mcp-plus-api
                 isIntegratedResponse: true
               enableCORS: true
               responseType: JSON
               serviceTimeout: 60
 
   layers:
-    - name: universal-db-mcp-deps
+    - name: universal-db-mcp-plus-deps
       version: 1
 
   vpc:
@@ -55,5 +55,5 @@ inputs:
     subnetId: ${env:SUBNET_ID}
 
   tags:
-    app: universal-db-mcp
+    app: universal-db-mcp-plus
     env: production

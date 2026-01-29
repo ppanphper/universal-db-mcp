@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: universal-db-mcp
+    name: universal-db-mcp-plus
     runtime: node
     env: node
     region: singapore

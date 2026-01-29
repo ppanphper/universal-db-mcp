@@ -100,7 +100,7 @@
     "highgo-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "highgo",
         "--host", "localhost",
         "--port", "5866",
@@ -121,7 +121,7 @@
     "highgo-write": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--danger-allow-write",
         "--type", "highgo",
         "--host", "localhost",
@@ -143,7 +143,7 @@
     "highgo-cluster": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "highgo",
         "--host", "highgo-cluster.example.com",
         "--port", "5866",
@@ -221,7 +221,7 @@
 
 ## 🎉 总结
 
-成功为 universal-db-mcp 项目添加了 HighGo 数据库支持，包括：
+成功为 universal-db-mcp-plus 项目添加了 HighGo 数据库支持，包括：
 - 完整的适配器实现
 - 详细的文档和示例
 - 与现有架构的无缝集成

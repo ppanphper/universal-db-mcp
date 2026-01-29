@@ -30,7 +30,7 @@ Resources:
   UniversalDbMcpFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: universal-db-mcp-api
+      FunctionName: universal-db-mcp-plus-api
       Description: Universal Database MCP API Handler
       CodeUri: ./
       Handler: index.handler
@@ -54,7 +54,7 @@ Resources:
   UniversalDbMcpApi:
     Type: AWS::Serverless::Api
     Properties:
-      Name: universal-db-mcp-api
+      Name: universal-db-mcp-plus-api
       StageName: prod
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"

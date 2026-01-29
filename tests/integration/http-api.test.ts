@@ -64,7 +64,7 @@ describe('HTTP API Integration Tests', () => {
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
-      expect(body.data.name).toBe('universal-db-mcp');
+      expect(body.data.name).toBe('universal-db-mcp-plus');
       expect(body.data.supportedDatabases).toBeInstanceOf(Array);
     });
   });

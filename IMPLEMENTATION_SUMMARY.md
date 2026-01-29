@@ -140,7 +140,7 @@ SESSION_CLEANUP_INTERVAL=300000
 ### Build and Run
 ```bash
 # Build image
-docker build -t universal-db-mcp -f docker/Dockerfile .
+docker build -t universal-db-mcp-plus -f docker/Dockerfile .
 
 # Run container
 docker run -p 3000:3000 \
@@ -152,7 +152,7 @@ docker run -p 3000:3000 \
   -e DB_USER=root \
   -e DB_PASSWORD=xxx \
   -e DB_DATABASE=test \
-  universal-db-mcp
+  universal-db-mcp-plus
 ```
 
 ### Docker Compose
@@ -354,7 +354,7 @@ curl -X POST http://localhost:3000/api/connect \
 ### For Claude Desktop (MCP Mode)
 No changes needed! Continue using as before:
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 # Configure in Claude Desktop config file
 ```
 
@@ -362,7 +362,7 @@ npm install -g universal-db-mcp
 
 1. **Install**:
    ```bash
-   npm install -g universal-db-mcp
+   npm install -g universal-db-mcp-plus
    ```
 
 2. **Configure** (create `.env`):
@@ -410,7 +410,7 @@ npm install -g universal-db-mcp
 ### Build Status
 ```bash
 $ npm run build
-> universal-db-mcp@1.0.0 build
+> universal-db-mcp-plus@1.0.0 build
 > tsc
 
 # ✅ Build successful (no errors)

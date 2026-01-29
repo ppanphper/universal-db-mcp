@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "name": "universal-db-mcp",
+  "name": "universal-db-mcp-plus",
   "builds": [
     {
       "src": "serverless/vercel/api/index.js",

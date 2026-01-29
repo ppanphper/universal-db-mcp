@@ -20,13 +20,13 @@ n8n 是一个工作流自动化工具。通过集成 Universal Database MCP Serv
 
 ```bash
 docker run -d \
-  --name universal-db-mcp \
+  --name universal-db-mcp-plus \
   -p 3000:3000 \
   -e MODE=http \
   -e HTTP_PORT=3000 \
   -e API_KEYS=n8n-secret-key \
   -e CORS_ORIGINS=* \
-  universal-db-mcp:latest
+  universal-db-mcp-plus:latest
 ```
 
 ### 步骤 2: 创建 n8n 工作流
@@ -484,5 +484,5 @@ environment:
 ## 支持
 
 如有集成问题：
-- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp/issues
+- GitHub Issues: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
 - n8n 社区: https://community.n8n.io/
