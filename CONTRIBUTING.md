@@ -6,7 +6,11 @@
 
 ### 报告 Bug
 
-如果你发现了 Bug，请在 [GitHub Issues](https://github.com/Anarkh-Lee/universal-db-mcp/issues) 中提交，并包含：
+如果你发现了 Bug，请在 [GitHub Issues](https://github.com/ppanphper/universal-db-mcp/issues) 中提交。
+
+> **说明**：本项目 (`ppanphper/universal-db-mcp`) 是基于社区版 (`Anarkh-Lee/universal-db-mcp`) 独立演进的增强版本。我们感谢原作者的贡献！
+
+请包含：
 
 - 详细的问题描述
 - 复现步骤
