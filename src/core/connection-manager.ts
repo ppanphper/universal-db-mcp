@@ -8,18 +8,32 @@ import { nanoid } from 'nanoid';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
 import type { Session } from '../types/http.js';
 import { createAdapter } from '../utils/adapter-factory.js';
-import { DatabaseService } from './database-service.js';
+import { DatabaseService, SchemaCacheConfig } from './database-service.js';
+
+/**
+ * 扩展的会话接口，包含 DatabaseService 实例
+ */
+interface ExtendedSession extends Session {
+  /** DatabaseService 实例（带缓存） */
+  service: DatabaseService;
+}
 
 /**
  * Connection Manager Class
  */
 export class ConnectionManager {
-  private sessions: Map<string, Session> = new Map();
+  private sessions: Map<string, ExtendedSession> = new Map();
   private cleanupInterval?: NodeJS.Timeout;
   private sessionTimeout: number;
+  private defaultCacheConfig: Partial<SchemaCacheConfig>;
 
-  constructor(sessionTimeout: number = 3600000, cleanupInterval: number = 300000) {
+  constructor(
+    sessionTimeout: number = 3600000,
+    cleanupInterval: number = 300000,
+    defaultCacheConfig?: Partial<SchemaCacheConfig>
+  ) {
     this.sessionTimeout = sessionTimeout;
+    this.defaultCacheConfig = defaultCacheConfig || {};
 
     // Start cleanup interval
     if (cleanupInterval > 0) {
@@ -42,11 +56,15 @@ export class ConnectionManager {
     // Generate session ID
     const sessionId = nanoid();
 
-    // Store session
-    const session: Session = {
+    // Create DatabaseService with cache support
+    const service = new DatabaseService(adapter, config, this.defaultCacheConfig);
+
+    // Store session with service
+    const session: ExtendedSession = {
       id: sessionId,
       adapter,
       config,
+      service,
       createdAt: new Date(),
       lastAccessedAt: new Date(),
     };
@@ -65,6 +83,9 @@ export class ConnectionManager {
     if (!session) {
       throw new Error(`会话 ${sessionId} 不存在`);
     }
+
+    // Clear schema cache before disconnecting
+    session.service.clearSchemaCache();
 
     // Disconnect adapter
     await session.adapter.disconnect();
@@ -91,6 +112,7 @@ export class ConnectionManager {
 
   /**
    * Get database service for a session
+   * Returns the cached DatabaseService instance to preserve schema cache
    */
   getService(sessionId: string): DatabaseService {
     const session = this.sessions.get(sessionId);
@@ -102,7 +124,8 @@ export class ConnectionManager {
     // Update last accessed time
     session.lastAccessedAt = new Date();
 
-    return new DatabaseService(session.adapter, session.config);
+    // Return the existing service instance (preserves cache)
+    return session.service;
   }
 
   /**
@@ -127,6 +150,26 @@ export class ConnectionManager {
   }
 
   /**
+   * Clear schema cache for a specific session
+   */
+  clearSessionCache(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.service.clearSchemaCache();
+    }
+  }
+
+  /**
+   * Clear schema cache for all sessions
+   */
+  clearAllCaches(): void {
+    for (const session of this.sessions.values()) {
+      session.service.clearSchemaCache();
+    }
+    console.error(`🗑️ 已清除所有会话的 Schema 缓存 (共 ${this.sessions.size} 个会话)`);
+  }
+
+  /**
    * Cleanup expired sessions
    */
   private cleanupExpiredSessions(): void {
@@ -137,7 +180,8 @@ export class ConnectionManager {
       const elapsed = now - lastAccessed;
 
       if (elapsed > this.sessionTimeout) {
-        // Disconnect and remove expired session
+        // Clear cache and disconnect
+        session.service.clearSchemaCache();
         session.adapter.disconnect().catch((err: Error) => {
           console.error(`清理会话 ${sessionId} 时出错:`, err);
         });
@@ -157,12 +201,13 @@ export class ConnectionManager {
       clearInterval(this.cleanupInterval);
     }
 
-    // Disconnect all sessions
-    const disconnectPromises = Array.from(this.sessions.values()).map(session =>
-      session.adapter.disconnect().catch((err: Error) => {
+    // Clear all caches and disconnect all sessions
+    const disconnectPromises = Array.from(this.sessions.values()).map(session => {
+      session.service.clearSchemaCache();
+      return session.adapter.disconnect().catch((err: Error) => {
         console.error(`断开会话 ${session.id} 时出错:`, err);
-      })
-    );
+      });
+    });
 
     await Promise.all(disconnectPromises);
 

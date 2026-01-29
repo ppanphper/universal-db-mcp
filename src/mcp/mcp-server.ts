@@ -12,7 +12,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
-import { DatabaseService } from '../core/database-service.js';
+import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -22,9 +22,11 @@ export class DatabaseMCPServer {
   private adapter: DbAdapter | null = null;
   private config: DbConfig;
   private databaseService: DatabaseService | null = null;
+  private cacheConfig: Partial<SchemaCacheConfig>;
 
-  constructor(config: DbConfig) {
+  constructor(config: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
     this.config = config;
+    this.cacheConfig = cacheConfig || {};
     this.server = new Server(
       {
         name: 'universal-db-mcp',
@@ -71,10 +73,15 @@ export class DatabaseMCPServer {
           },
           {
             name: 'get_schema',
-            description: '获取数据库结构信息，包括所有表名、列名、数据类型、主键、索引等元数据。在执行查询前调用此工具可以帮助理解数据库结构。',
+            description: '获取数据库结构信息，包括所有表名、列名、数据类型、主键、索引等元数据。在执行查询前调用此工具可以帮助理解数据库结构。结果会被缓存以提高性能。',
             inputSchema: {
               type: 'object',
-              properties: {},
+              properties: {
+                forceRefresh: {
+                  type: 'boolean',
+                  description: '是否强制刷新缓存（可选，默认 false）。设为 true 可获取最新的数据库结构。',
+                },
+              },
             },
           },
           {
@@ -87,8 +94,20 @@ export class DatabaseMCPServer {
                   type: 'string',
                   description: '表名',
                 },
+                forceRefresh: {
+                  type: 'boolean',
+                  description: '是否强制刷新缓存（可选，默认 false）',
+                },
               },
               required: ['tableName'],
+            },
+          },
+          {
+            name: 'clear_cache',
+            description: '清除 Schema 缓存。当数据库结构发生变化（如新增表、修改列）时，可以调用此工具清除缓存。',
+            inputSchema: {
+              type: 'object',
+              properties: {},
             },
           },
         ],
@@ -124,32 +143,63 @@ export class DatabaseMCPServer {
           }
 
           case 'get_schema': {
+            const { forceRefresh } = (args as { forceRefresh?: boolean }) || {};
+
             console.error('📋 获取数据库结构...');
 
-            const schema = await this.databaseService.getSchema();
+            const schema = await this.databaseService.getSchema(forceRefresh);
+
+            // 添加缓存状态信息
+            const cacheStats = this.databaseService.getCacheStats();
+            const response = {
+              ...schema,
+              _cacheInfo: {
+                cached: cacheStats.isCached,
+                cachedAt: cacheStats.cachedAt?.toISOString(),
+                hitRate: this.databaseService.getCacheHitRate() + '%',
+              },
+            };
 
             return {
               content: [
                 {
                   type: 'text',
-                  text: JSON.stringify(schema, null, 2),
+                  text: JSON.stringify(response, null, 2),
                 },
               ],
             };
           }
 
           case 'get_table_info': {
-            const { tableName } = args as { tableName: string };
+            const { tableName, forceRefresh } = args as { tableName: string; forceRefresh?: boolean };
 
             console.error(`📄 获取表信息: ${tableName}`);
 
-            const table = await this.databaseService.getTableInfo(tableName);
+            const table = await this.databaseService.getTableInfo(tableName, forceRefresh);
 
             return {
               content: [
                 {
                   type: 'text',
                   text: JSON.stringify(table, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'clear_cache': {
+            console.error('🗑️ 清除 Schema 缓存...');
+
+            this.databaseService.clearSchemaCache();
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: 'Schema 缓存已清除',
+                  }, null, 2),
                 },
               ],
             };
@@ -180,7 +230,7 @@ export class DatabaseMCPServer {
    */
   setAdapter(adapter: DbAdapter): void {
     this.adapter = adapter;
-    this.databaseService = new DatabaseService(adapter, this.config);
+    this.databaseService = new DatabaseService(adapter, this.config, this.cacheConfig);
   }
 
   /**
@@ -203,6 +253,9 @@ export class DatabaseMCPServer {
       console.error('🛡️  安全模式: 只读模式（推荐）');
     }
 
+    // 显示缓存配置
+    console.error('📦 Schema 缓存已启用 (默认 TTL: 5 分钟)');
+
     // 启动 MCP 服务器
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
@@ -214,6 +267,9 @@ export class DatabaseMCPServer {
    * 停止服务器
    */
   async stop(): Promise<void> {
+    if (this.databaseService) {
+      this.databaseService.clearSchemaCache();
+    }
     if (this.adapter) {
       await this.adapter.disconnect();
       console.error('👋 数据库连接已关闭');

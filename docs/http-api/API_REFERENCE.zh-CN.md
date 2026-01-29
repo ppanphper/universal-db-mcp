@@ -375,10 +375,16 @@ curl -X POST http://localhost:3000/api/execute \
 
 **查询参数**:
 - `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
+- `forceRefresh` (字符串, 可选): 是否强制刷新缓存，值为 `true` 或 `false`（默认: `false`）
 
 **请求示例**:
 ```bash
+# 使用缓存（默认）
 curl "http://localhost:3000/api/tables?sessionId=V1StGXR8_Z5jdHi6B-myT" \
+  -H "X-API-Key: your-secret-key"
+
+# 强制刷新缓存
+curl "http://localhost:3000/api/tables?sessionId=V1StGXR8_Z5jdHi6B-myT&forceRefresh=true" \
   -H "X-API-Key: your-secret-key"
 ```
 
@@ -402,10 +408,16 @@ curl "http://localhost:3000/api/tables?sessionId=V1StGXR8_Z5jdHi6B-myT" \
 
 **查询参数**:
 - `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
+- `forceRefresh` (字符串, 可选): 是否强制刷新缓存，值为 `true` 或 `false`（默认: `false`）
 
 **请求示例**:
 ```bash
+# 使用缓存（默认，推荐）
 curl "http://localhost:3000/api/schema?sessionId=V1StGXR8_Z5jdHi6B-myT" \
+  -H "X-API-Key: your-secret-key"
+
+# 强制刷新缓存（当数据库结构发生变化时使用）
+curl "http://localhost:3000/api/schema?sessionId=V1StGXR8_Z5jdHi6B-myT&forceRefresh=true" \
   -H "X-API-Key: your-secret-key"
 ```
 
@@ -446,7 +458,12 @@ curl "http://localhost:3000/api/schema?sessionId=V1StGXR8_Z5jdHi6B-myT" \
         ],
         "estimatedRows": 1000
       }
-    ]
+    ],
+    "_cacheInfo": {
+      "cached": true,
+      "cachedAt": "2026-01-27T12:00:00.000Z",
+      "hitRate": "85.00%"
+    }
   },
   "metadata": {
     "timestamp": "2026-01-27T12:00:00.000Z",
@@ -464,6 +481,7 @@ curl "http://localhost:3000/api/schema?sessionId=V1StGXR8_Z5jdHi6B-myT" \
 
 **查询参数**:
 - `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
+- `forceRefresh` (字符串, 可选): 是否强制刷新缓存，值为 `true` 或 `false`（默认: `false`）
 
 **请求示例**:
 ```bash
@@ -522,6 +540,73 @@ curl "http://localhost:3000/api/schema/users?sessionId=V1StGXR8_Z5jdHi6B-myT" \
 }
 ```
 
+### 缓存管理
+
+为了提高大型数据库的性能，Schema 信息会被缓存。以下端点用于管理缓存。
+
+#### DELETE /api/cache
+
+清除指定会话的 Schema 缓存。当数据库结构发生变化（如新增表、修改列）时，可以调用此端点清除缓存。
+
+**查询参数**:
+- `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
+
+**请求示例**:
+```bash
+curl -X DELETE "http://localhost:3000/api/cache?sessionId=V1StGXR8_Z5jdHi6B-myT" \
+  -H "X-API-Key: your-secret-key"
+```
+
+**响应** (200 OK):
+```json
+{
+  "success": true,
+  "data": {
+    "cleared": true,
+    "message": "Schema 缓存已清除"
+  },
+  "metadata": {
+    "timestamp": "2026-01-27T12:00:00.000Z",
+    "requestId": "abc123"
+  }
+}
+```
+
+#### GET /api/cache/status
+
+获取指定会话的缓存状态信息。
+
+**查询参数**:
+- `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
+
+**请求示例**:
+```bash
+curl "http://localhost:3000/api/cache/status?sessionId=V1StGXR8_Z5jdHi6B-myT" \
+  -H "X-API-Key: your-secret-key"
+```
+
+**响应** (200 OK):
+```json
+{
+  "success": true,
+  "data": {
+    "sessionId": "V1StGXR8_Z5jdHi6B-myT",
+    "cache": {
+      "isCached": true,
+      "cachedAt": "2026-01-27T12:00:00.000Z",
+      "expiresAt": "2026-01-27T12:05:00.000Z",
+      "hitCount": 15,
+      "missCount": 2
+    },
+    "hitRate": "88.24%"
+  },
+  "metadata": {
+    "timestamp": "2026-01-27T12:00:00.000Z",
+    "requestId": "abc123"
+  }
+}
+```
+
 ## 错误代码
 
 | 代码 | HTTP 状态 | 描述 |
@@ -536,6 +621,8 @@ curl "http://localhost:3000/api/schema/users?sessionId=V1StGXR8_Z5jdHi6B-myT" \
 | `LIST_TABLES_FAILED` | 500 | 列出表失败 |
 | `GET_SCHEMA_FAILED` | 500 | 获取 Schema 失败 |
 | `GET_TABLE_INFO_FAILED` | 500 | 获取表信息失败 |
+| `CLEAR_CACHE_FAILED` | 500 | 清除缓存失败 |
+| `GET_CACHE_STATUS_FAILED` | 500 | 获取缓存状态失败 |
 | `INTERNAL_ERROR` | 500 | 内部服务器错误 |
 
 ## 会话管理
