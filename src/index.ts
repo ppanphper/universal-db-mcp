@@ -418,6 +418,9 @@ async function main() {
 
 
 
+
+    await program.parseAsync();
+
   } catch (error) {
     console.error('❌ 未捕获的错误:', error);
     process.exit(1);
