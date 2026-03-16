@@ -336,7 +336,7 @@ export async function setupSchemaRoutes(
         required: ['sessionId', 'tableName', 'columnName'],
         properties: {
           sessionId: { type: 'string' },
-          tableName: { type: 'string', description: '表名' },
+          tableName: { type: 'string', description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。' },
           columnName: { type: 'string', description: '列名' },
           limit: { type: 'string', description: '最大返回数量（默认 50，最大 100）' },
           includeCount: { type: 'string', description: '是否包含每个值的出现次数 (true/false)' },
@@ -403,7 +403,7 @@ export async function setupSchemaRoutes(
         required: ['sessionId', 'tableName'],
         properties: {
           sessionId: { type: 'string' },
-          tableName: { type: 'string', description: '表名' },
+          tableName: { type: 'string', description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。' },
           columns: { type: 'string', description: '要查看的列（逗号分隔，可选）' },
           limit: { type: 'string', description: '返回行数（默认 3，最大 10）' },
         },

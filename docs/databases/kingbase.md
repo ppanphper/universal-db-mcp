@@ -63,7 +63,7 @@
 
 Claude 会自动:
 1. 调用 get_schema 工具
-2. 查询 public schema 下的所有表
+2. 查询所有用户 Schema 下的表
 3. 返回表列表
 ```
 
@@ -104,7 +104,7 @@ Claude 会:
 ## 注意事项
 
 1. **默认端口** - 54321（与 PostgreSQL 不同）
-2. **Schema** - 默认查询 public schema
+2. **多 Schema 支持** - 自动获取所有用户 Schema 下的表。`public` Schema 下的表直接使用表名，其他 Schema 的表使用 `schema.table_name` 格式。
 3. **参数化查询** - 支持 $1, $2, ... 占位符
 4. **驱动** - 使用 PostgreSQL 的 pg 驱动
 5. **国产化** - 适用于国产化替代场景

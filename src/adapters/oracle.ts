@@ -198,57 +198,83 @@ export class OracleAdapter implements DbAdapter {
 
       // 获取当前用户
       const userResult = await connection.execute('SELECT USER FROM DUAL');
-      const databaseName = userResult.rows?.[0]
+      const currentUser = userResult.rows?.[0]
         ? Object.values(userResult.rows[0])[0] as string
         : 'unknown';
+      const databaseName = currentUser;
 
       // 批量获取所有表的列信息
       const allColumnsResult = await connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+        `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
                 DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
          FROM ALL_TAB_COLUMNS
-         WHERE OWNER = USER
+         WHERE OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
          ORDER BY TABLE_NAME, COLUMN_ID`
       );
 
       // 批量获取所有列注释
       const allCommentsResult = await connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
+        `SELECT OWNER, TABLE_NAME, COLUMN_NAME, COMMENTS
          FROM ALL_COL_COMMENTS
-         WHERE OWNER = USER
+         WHERE OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
            AND COMMENTS IS NOT NULL`
       );
 
       // 批量获取所有主键信息
       const allPrimaryKeysResult = await connection.execute(
-        `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
+        `SELECT cons.OWNER, cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
          FROM ALL_CONSTRAINTS cons
          JOIN ALL_CONS_COLUMNS cols
            ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
            AND cons.OWNER = cols.OWNER
          WHERE cons.CONSTRAINT_TYPE = 'P'
-           AND cons.OWNER = USER
+           AND cons.OWNER NOT IN (
+             'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+             'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+             'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+             'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+           )
          ORDER BY cons.TABLE_NAME, cols.POSITION`
       );
 
       // 批量获取所有索引信息
       const allIndexesResult = await connection.execute(
-        `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+        `SELECT i.TABLE_OWNER AS OWNER, i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
          FROM ALL_INDEXES i
          JOIN ALL_IND_COLUMNS ic
            ON i.INDEX_NAME = ic.INDEX_NAME
            AND i.OWNER = ic.INDEX_OWNER
-         WHERE i.OWNER = USER
+         WHERE i.OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
            AND i.INDEX_TYPE != 'LOB'
          ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`
       );
 
       // 批量获取所有表的行数估算和表注释
       const allStatsResult = await connection.execute(
-        `SELECT t.TABLE_NAME, t.NUM_ROWS, c.COMMENTS AS TABLE_COMMENT
+        `SELECT t.OWNER, t.TABLE_NAME, t.NUM_ROWS, c.COMMENTS AS TABLE_COMMENT
          FROM ALL_TABLES t
          LEFT JOIN ALL_TAB_COMMENTS c ON t.TABLE_NAME = c.TABLE_NAME AND t.OWNER = c.OWNER
-         WHERE t.OWNER = USER
+         WHERE t.OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
            AND t.TEMPORARY = 'N'`
       );
 
@@ -257,9 +283,11 @@ export class OracleAdapter implements DbAdapter {
       try {
         const allForeignKeysResult = await connection.execute(
           `SELECT
+            c.OWNER,
             c.TABLE_NAME,
             c.CONSTRAINT_NAME,
             cc.COLUMN_NAME,
+            rc.OWNER AS REF_OWNER,
             rc.TABLE_NAME AS REFERENCED_TABLE,
             rcc.COLUMN_NAME AS REFERENCED_COLUMN,
             c.DELETE_RULE,
@@ -269,7 +297,12 @@ export class OracleAdapter implements DbAdapter {
           JOIN ALL_CONSTRAINTS rc ON c.R_CONSTRAINT_NAME = rc.CONSTRAINT_NAME AND c.R_OWNER = rc.OWNER
           JOIN ALL_CONS_COLUMNS rcc ON rc.CONSTRAINT_NAME = rcc.CONSTRAINT_NAME AND rc.OWNER = rcc.OWNER AND cc.POSITION = rcc.POSITION
           WHERE c.CONSTRAINT_TYPE = 'R'
-            AND c.OWNER = USER
+            AND c.OWNER NOT IN (
+              'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+              'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+              'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+              'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+            )
           ORDER BY c.TABLE_NAME, c.CONSTRAINT_NAME, cc.POSITION`
         );
         allForeignKeys = allForeignKeysResult.rows || [];
@@ -286,9 +319,14 @@ export class OracleAdapter implements DbAdapter {
         allPrimaryKeysResult.rows || [],
         allIndexesResult.rows || [],
         allStatsResult.rows || [],
-        allForeignKeys
+        allForeignKeys,
+        currentUser
       );
     });
+  }
+
+  private makeTableKey(owner: string, tableName: string, currentUser: string): string {
+    return owner === currentUser ? tableName : `${owner}.${tableName}`;
   }
 
   /**
@@ -302,12 +340,15 @@ export class OracleAdapter implements DbAdapter {
     allPrimaryKeys: any[],
     allIndexes: any[],
     allStats: any[],
-    allForeignKeys: any[]
+    allForeignKeys: any[],
+    currentUser: string
   ): SchemaInfo {
     // 按表名分组列信息
     const columnsByTable = new Map<string, ColumnInfo[]>();
+    const schemaByTable = new Map<string, string>();
 
     for (const col of allColumns) {
+      const owner = col.OWNER;
       const tableName = col.TABLE_NAME;
       const columnName = col.COLUMN_NAME;
 
@@ -316,11 +357,14 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!columnsByTable.has(tableName)) {
-        columnsByTable.set(tableName, []);
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!columnsByTable.has(tableKey)) {
+        columnsByTable.set(tableKey, []);
+        schemaByTable.set(tableKey, owner);
       }
 
-      columnsByTable.get(tableName)!.push({
+      columnsByTable.get(tableKey)!.push({
         name: columnName.toLowerCase(),
         type: this.formatOracleType(
           col.DATA_TYPE,
@@ -336,6 +380,7 @@ export class OracleAdapter implements DbAdapter {
     // 按表名分组列注释
     const commentsByTable = new Map<string, Map<string, string>>();
     for (const comment of allComments) {
+      const owner = comment.OWNER;
       const tableName = comment.TABLE_NAME;
       const columnName = comment.COLUMN_NAME;
       const comments = comment.COMMENTS;
@@ -345,18 +390,20 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!commentsByTable.has(tableName)) {
-        commentsByTable.set(tableName, new Map());
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!commentsByTable.has(tableKey)) {
+        commentsByTable.set(tableKey, new Map());
       }
-      commentsByTable.get(tableName)!.set(
+      commentsByTable.get(tableKey)!.set(
         columnName.toLowerCase(),
         comments
       );
     }
 
     // 将注释添加到列信息中
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableComments = commentsByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableComments = commentsByTable.get(tableKey);
       if (tableComments) {
         for (const col of columns) {
           if (tableComments.has(col.name)) {
@@ -369,6 +416,7 @@ export class OracleAdapter implements DbAdapter {
     // 按表名分组主键信息
     const primaryKeysByTable = new Map<string, string[]>();
     for (const pk of allPrimaryKeys) {
+      const owner = pk.OWNER;
       const tableName = pk.TABLE_NAME;
       const columnName = pk.COLUMN_NAME;
 
@@ -377,16 +425,19 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!primaryKeysByTable.has(tableName)) {
-        primaryKeysByTable.set(tableName, []);
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!primaryKeysByTable.has(tableKey)) {
+        primaryKeysByTable.set(tableKey, []);
       }
-      primaryKeysByTable.get(tableName)!.push(columnName.toLowerCase());
+      primaryKeysByTable.get(tableKey)!.push(columnName.toLowerCase());
     }
 
     // 按表名分组索引信息
     const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
 
     for (const idx of allIndexes) {
+      const owner = idx.OWNER;
       const tableName = idx.TABLE_NAME;
       const indexName = idx.INDEX_NAME;
       const columnName = idx.COLUMN_NAME;
@@ -401,11 +452,13 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!indexesByTable.has(tableName)) {
-        indexesByTable.set(tableName, new Map());
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!indexesByTable.has(tableKey)) {
+        indexesByTable.set(tableKey, new Map());
       }
 
-      const tableIndexes = indexesByTable.get(tableName)!;
+      const tableIndexes = indexesByTable.get(tableKey)!;
 
       if (!tableIndexes.has(indexName)) {
         tableIndexes.set(indexName, {
@@ -421,11 +474,13 @@ export class OracleAdapter implements DbAdapter {
     const rowsByTable = new Map<string, number>();
     const tableCommentsByTable = new Map<string, string>();
     for (const stat of allStats) {
+      const owner = stat.OWNER;
       const tableName = stat.TABLE_NAME;
       if (tableName) {
-        rowsByTable.set(tableName, stat.NUM_ROWS || 0);
+        const tableKey = this.makeTableKey(owner, tableName, currentUser);
+        rowsByTable.set(tableKey, stat.NUM_ROWS || 0);
         if (stat.TABLE_COMMENT) {
-          tableCommentsByTable.set(tableName, stat.TABLE_COMMENT);
+          tableCommentsByTable.set(tableKey, stat.TABLE_COMMENT);
         }
       }
     }
@@ -435,21 +490,26 @@ export class OracleAdapter implements DbAdapter {
     const relationships: RelationshipInfo[] = [];
 
     for (const fk of allForeignKeys) {
+      const owner = fk.OWNER;
       const tableName = fk.TABLE_NAME;
       const constraintName = fk.CONSTRAINT_NAME;
 
       if (!tableName || !constraintName) continue;
 
-      if (!foreignKeysByTable.has(tableName)) {
-        foreignKeysByTable.set(tableName, new Map());
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+      const refOwner = fk.REF_OWNER;
+      const refTableKey = this.makeTableKey(refOwner, fk.REFERENCED_TABLE, currentUser);
+
+      if (!foreignKeysByTable.has(tableKey)) {
+        foreignKeysByTable.set(tableKey, new Map());
       }
 
-      const tableForeignKeys = foreignKeysByTable.get(tableName)!;
+      const tableForeignKeys = foreignKeysByTable.get(tableKey)!;
 
       if (!tableForeignKeys.has(constraintName)) {
         tableForeignKeys.set(constraintName, {
           columns: [],
-          referencedTable: fk.REFERENCED_TABLE,
+          referencedTable: refTableKey,
           referencedColumns: [],
           onDelete: fk.DELETE_RULE,
         });
@@ -461,10 +521,10 @@ export class OracleAdapter implements DbAdapter {
     }
 
     // 生成全局关系视图
-    for (const [tableName, tableForeignKeys] of foreignKeysByTable.entries()) {
+    for (const [tableKey, tableForeignKeys] of foreignKeysByTable.entries()) {
       for (const [constraintName, fkInfo] of tableForeignKeys.entries()) {
         relationships.push({
-          fromTable: tableName.toLowerCase(),
+          fromTable: tableKey.toLowerCase(),
           fromColumns: fkInfo.columns,
           toTable: fkInfo.referencedTable.toLowerCase(),
           toColumns: fkInfo.referencedColumns,
@@ -477,8 +537,8 @@ export class OracleAdapter implements DbAdapter {
     // 组装表信息（基于列信息构建，不依赖 ALL_TABLES 的结果）
     const tableInfos: TableInfo[] = [];
 
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableIndexes = indexesByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableIndexes = indexesByTable.get(tableKey);
       const indexInfos: IndexInfo[] = [];
 
       if (tableIndexes) {
@@ -492,7 +552,7 @@ export class OracleAdapter implements DbAdapter {
       }
 
       // 组装外键信息
-      const tableForeignKeys = foreignKeysByTable.get(tableName);
+      const tableForeignKeys = foreignKeysByTable.get(tableKey);
       const foreignKeyInfos: ForeignKeyInfo[] = [];
 
       if (tableForeignKeys) {
@@ -508,13 +568,14 @@ export class OracleAdapter implements DbAdapter {
       }
 
       tableInfos.push({
-        name: tableName.toLowerCase(),
-        comment: tableCommentsByTable.get(tableName) || undefined,
+        name: tableKey.toLowerCase(),
+        schema: schemaByTable.get(tableKey),
+        comment: tableCommentsByTable.get(tableKey) || undefined,
         columns,
-        primaryKeys: primaryKeysByTable.get(tableName) || [],
+        primaryKeys: primaryKeysByTable.get(tableKey) || [],
         indexes: indexInfos,
         foreignKeys: foreignKeyInfos.length > 0 ? foreignKeyInfos : undefined,
-        estimatedRows: rowsByTable.get(tableName) || 0,
+        estimatedRows: rowsByTable.get(tableKey) || 0,
       });
     }
 

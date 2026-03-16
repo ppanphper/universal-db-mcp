@@ -922,7 +922,7 @@ Claude 会:
 
 **Claude 会自动**:
 1. 调用 `get_schema` 工具
-2. 执行查询获取 public schema 下的所有表
+2. 执行查询获取所有用户 Schema 下的表
 3. 返回表列表
 
 **用户**: 查看 users 表的结构
@@ -949,7 +949,7 @@ Claude 会:
 1. **默认端口**: KingbaseES 默认端口为 54321
 2. **兼容性**: 基于 PostgreSQL 开发，兼容 PostgreSQL 协议和 SQL 语法
 3. **驱动**: 使用 PostgreSQL 的 `pg` 驱动
-4. **Schema**: 默认查询 public schema 下的表
+4. **多 Schema 支持**: 自动获取所有用户 Schema 下的表，`public` Schema 的表直接使用表名，其他 Schema 使用 `schema.table_name` 格式
 5. **参数化查询**: 支持 `$1, $2, ...` 占位符
 6. **国产化**: 适用于国产化替代场景
 
@@ -1071,7 +1071,7 @@ Claude 会（在写入模式下）:
 
 **Claude 会自动**:
 1. 调用 `get_schema` 工具
-2. 执行查询获取 public schema 下的所有表
+2. 执行查询获取所有用户 Schema 下的表
 3. 返回表列表
 
 **用户**: 查看 products 表的结构
@@ -1098,7 +1098,7 @@ Claude 会（在写入模式下）:
 1. **默认端口**: GaussDB/OpenGauss 默认端口为 5432（与 PostgreSQL 相同）
 2. **兼容性**: 基于 PostgreSQL 9.2 开发，兼容 PostgreSQL 协议和大部分 SQL 语法
 3. **驱动**: 使用 PostgreSQL 的 `pg` 驱动
-4. **Schema**: 默认查询 public schema 下的表
+4. **多 Schema 支持**: 自动获取所有用户 Schema 下的表，`public` Schema 的表直接使用表名，其他 Schema 使用 `schema.table_name` 格式
 5. **参数化查询**: 支持 `$1, $2, ...` 占位符
 6. **国产化**: 华为自研数据库，适用于国产化替代场景
 7. **开源版本**: OpenGauss 是 GaussDB 的开源版本

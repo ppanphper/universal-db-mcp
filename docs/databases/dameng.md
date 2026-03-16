@@ -151,13 +151,19 @@ npm install universal-db-mcp
 - 查询结果会自动转换为小写以保持一致性
 - 在 SQL 中使用表名时建议使用大写或双引号
 
-### 4. 兼容性
+### 4. 多 Schema 支持
+
+- 自动获取当前用户有权访问的所有用户的表（排除 SYS、SYSTEM 等系统用户）
+- 当前用户的表直接使用表名（如 `EMPLOYEES`），其他用户的表使用 `owner.table_name` 格式（如 `HR.EMPLOYEES`）
+- 查询时支持使用 `owner.table_name` 格式精确指定表
+
+### 5. 兼容性
 
 - 达梦数据库高度兼容 Oracle
 - 支持 Oracle 风格的 SQL 语法
 - 支持 PL/SQL 存储过程
 
-### 5. 安全模式
+### 6. 安全模式
 
 - 默认为只读模式，阻止所有写操作
 - 需要写入时使用 `--permission-mode readwrite` 或 `--permission-mode full`

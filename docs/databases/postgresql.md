@@ -85,9 +85,16 @@ Claude 会自动:
 -- 创建只读用户
 CREATE USER mcp_readonly WITH PASSWORD 'secure_password';
 GRANT CONNECT ON DATABASE mydb TO mcp_readonly;
+
+-- 授予 public schema 权限
 GRANT USAGE ON SCHEMA public TO mcp_readonly;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO mcp_readonly;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO mcp_readonly;
+
+-- 如需访问其他 schema，需要额外授权
+-- GRANT USAGE ON SCHEMA analytics TO mcp_readonly;
+-- GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO mcp_readonly;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA analytics GRANT SELECT ON TABLES TO mcp_readonly;
 ```
 
 ## 支持的版本
@@ -101,7 +108,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO mcp_readonly
 
 ## 特性支持
 
-- Schema 查询
+- 多 Schema 支持（自动发现所有用户 Schema）
 - 参数化查询（$1, $2, ...）
 - 事务支持
 - JSON/JSONB 类型
@@ -109,7 +116,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO mcp_readonly
 
 ## 注意事项
 
-1. **Schema** - 默认查询 public schema
+1. **多 Schema 支持** - 自动获取所有用户 Schema 下的表（排除 `pg_catalog`、`information_schema` 等系统 Schema）。`public` Schema 下的表直接使用表名（如 `users`），其他 Schema 的表使用 `schema.table_name` 格式（如 `analytics.events`）。查询时支持使用 `schema.table_name` 格式精确指定表。
 2. **参数化查询** - 使用 $1, $2 占位符
 3. **SSL** - 生产环境建议启用 SSL
 

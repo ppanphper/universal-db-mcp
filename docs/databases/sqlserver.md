@@ -330,7 +330,10 @@ mycompany-sql.database.windows.net
    ```sql
    CREATE LOGIN readonly_user WITH PASSWORD = 'SecurePassword123!';
    CREATE USER readonly_user FOR LOGIN readonly_user;
+   -- 授予 dbo schema 读权限
    GRANT SELECT ON SCHEMA::dbo TO readonly_user;
+   -- 如需访问其他 schema，需要额外授权
+   -- GRANT SELECT ON SCHEMA::analytics TO readonly_user;
    ```
 
 2. **限制访问范围**: 只授予必要的表访问权限

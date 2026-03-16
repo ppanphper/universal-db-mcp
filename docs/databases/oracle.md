@@ -185,17 +185,19 @@ CREATE USER mcp_readonly IDENTIFIED BY secure_password;
 GRANT CREATE SESSION TO mcp_readonly;
 GRANT SELECT ANY TABLE TO mcp_readonly;
 
--- 或者授予特定表的权限
-GRANT SELECT ON schema.table_name TO mcp_readonly;
+-- 或者授予特定用户下表的权限
+GRANT SELECT ON hr.employees TO mcp_readonly;
+GRANT SELECT ON sales.orders TO mcp_readonly;
 ```
 
 ## 注意事项
 
 1. **表名大小写** - Oracle 默认表名为大写
-2. **分页语法** - 12c+ 使用 `FETCH FIRST n ROWS ONLY`，11g 使用 `ROWNUM`
-3. **日期格式** - 注意 NLS_DATE_FORMAT 设置
-4. **字符集** - 建议使用 AL32UTF8
-5. **Thick 模式** - 启用后会输出日志 `🔧 Oracle Thick 模式已启用`
+2. **多 Schema 支持** - 自动获取当前用户有权访问的所有用户的表（排除 SYS、SYSTEM 等系统用户）。当前用户的表直接使用表名（如 `EMPLOYEES`），其他用户的表使用 `owner.table_name` 格式（如 `HR.EMPLOYEES`）。查询时支持使用 `owner.table_name` 格式精确指定表。
+3. **分页语法** - 12c+ 使用 `FETCH FIRST n ROWS ONLY`，11g 使用 `ROWNUM`
+4. **日期格式** - 注意 NLS_DATE_FORMAT 设置
+5. **字符集** - 建议使用 AL32UTF8
+6. **Thick 模式** - 启用后会输出日志 `🔧 Oracle Thick 模式已启用`
 
 ## 连接稳定性
 

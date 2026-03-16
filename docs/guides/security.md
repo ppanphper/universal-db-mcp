@@ -143,6 +143,11 @@ GRANT CONNECT ON DATABASE mydb TO mcp_readonly;
 GRANT USAGE ON SCHEMA public TO mcp_readonly;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO mcp_readonly;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO mcp_readonly;
+
+-- 如需访问其他 schema，需要额外授权
+-- GRANT USAGE ON SCHEMA analytics TO mcp_readonly;
+-- GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO mcp_readonly;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA analytics GRANT SELECT ON TABLES TO mcp_readonly;
 ```
 
 #### Oracle

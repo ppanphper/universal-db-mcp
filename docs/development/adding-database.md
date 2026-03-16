@@ -141,6 +141,14 @@ async getSchema(): Promise<SchemaInfo> {
 }
 ```
 
+> **注意：多 Schema 支持**
+>
+> 如果新数据库支持 Schema（如 PostgreSQL 系、SQL Server、Oracle），需要在 `getSchema()` 中：
+> 1. 查询所有用户 Schema 的表（排除系统 Schema）
+> 2. 在 `TableInfo.name` 中使用 `schema.table_name` 格式（非默认 Schema 时）
+> 3. 设置 `TableInfo.schema` 字段标记表所属 Schema
+> 4. 参考 `src/adapters/postgres.ts` 中的 `makeTableKey()` 方法
+
 #### getTableInfo()
 
 获取表详细信息：

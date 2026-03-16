@@ -71,8 +71,10 @@ export interface SchemaInfo {
  * 表结构信息
  */
 export interface TableInfo {
-  /** 表名 */
+  /** 表名（非默认 schema 时格式为 schema.table_name） */
   name: string;
+  /** 所属 Schema（PG=schema, Oracle/DM=owner, SQLServer=schema） */
+  schema?: string;
   /** 表注释/描述 */
   comment?: string;
   /** 列信息 */

@@ -667,7 +667,7 @@ curl "http://localhost:3000/api/schema?sessionId=V1StGXR8_Z5jdHi6B-myT&forceRefr
 获取特定表的信息。
 
 **路径参数**:
-- `table` (字符串, 必需): 表名
+- `table` (字符串, 必需): 表名。支持 `schema.table_name` 格式指定 Schema（如 `analytics.users`）。
 
 **查询参数**:
 - `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
@@ -748,7 +748,7 @@ curl "http://localhost:3000/api/schema/users?sessionId=V1StGXR8_Z5jdHi6B-myT" \
 
 **查询参数**:
 - `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
-- `table` (字符串, 必需): 表名
+- `table` (字符串, 必需): 表名。支持 `schema.table_name` 格式指定 Schema（如 `analytics.users`）。
 - `column` (字符串, 必需): 列名
 - `limit` (数字, 可选): 返回的最大值数量（默认: 100）
 
@@ -789,7 +789,7 @@ curl "http://localhost:3000/api/enum-values?sessionId=V1StGXR8_Z5jdHi6B-myT&tabl
 
 **查询参数**:
 - `sessionId` (字符串, 必需): 从 `/api/connect` 获取的会话 ID
-- `table` (字符串, 必需): 表名
+- `table` (字符串, 必需): 表名。支持 `schema.table_name` 格式指定 Schema（如 `analytics.users`）。
 - `limit` (数字, 可选): 返回的最大行数（默认: 5，最大: 100）
 - `masking` (字符串, 可选): 是否启用数据脱敏，值为 `true` 或 `false`（默认: `true`）
 

@@ -650,7 +650,7 @@ curl "http://localhost:3000/api/schema?sessionId=V1StGXR8_Z5jdHi6B-myT" \
 Get information about a specific table.
 
 **Path Parameters**:
-- `table` (string, required): Table name
+- `table` (string, required): Table name. Supports `schema.table_name` format (e.g., `analytics.users`).
 
 **Query Parameters**:
 - `sessionId` (string, required): Session ID from `/api/connect`
@@ -728,7 +728,7 @@ Get all unique values for a column. Useful for understanding enum-type columns l
 
 **Query Parameters**:
 - `sessionId` (string, required): Session ID from `/api/connect`
-- `tableName` (string, required): Table name
+- `tableName` (string, required): Table name. Supports `schema.table_name` format (e.g., `analytics.users`).
 - `columnName` (string, required): Column name
 - `limit` (string, optional): Maximum number of values to return (default: 50, max: 100)
 - `includeCount` (string, optional): Include count for each value (true/false, default: false)
@@ -773,7 +773,7 @@ Get sample data from a table with automatic data masking for privacy protection.
 
 **Query Parameters**:
 - `sessionId` (string, required): Session ID from `/api/connect`
-- `tableName` (string, required): Table name
+- `tableName` (string, required): Table name. Supports `schema.table_name` format (e.g., `analytics.users`).
 - `columns` (string, optional): Comma-separated list of columns to include
 - `limit` (string, optional): Number of rows to return (default: 3, max: 10)
 

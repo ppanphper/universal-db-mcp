@@ -168,17 +168,41 @@ export class DatabaseService {
 
   /**
    * Get information about a specific table
-   * @param tableName - 表名
+   * @param tableName - 表名（支持 schema.table_name 格式）
    * @param forceRefresh - 是否强制刷新缓存
    */
   async getTableInfo(tableName: string, forceRefresh: boolean = false): Promise<TableInfo> {
     const schema = await this.getSchema(forceRefresh);
 
-    // 支持大小写不敏感的表名匹配
-    const table = schema.tables.find(t =>
+    // 1. 精确匹配 name 字段（已包含 schema 前缀）
+    let table = schema.tables.find(t =>
       t.name === tableName ||
       t.name.toLowerCase() === tableName.toLowerCase()
     );
+
+    // 2. 如果没找到且包含点号，尝试用 schema + 表名组合匹配
+    if (!table && tableName.includes('.')) {
+      const dotIndex = tableName.indexOf('.');
+      const schemaName = tableName.substring(0, dotIndex);
+      const tblName = tableName.substring(dotIndex + 1);
+      table = schema.tables.find(t =>
+        t.schema?.toLowerCase() === schemaName.toLowerCase() &&
+        (t.name === tblName || t.name.toLowerCase() === tblName.toLowerCase() ||
+         t.name.toLowerCase() === tableName.toLowerCase())
+      );
+    }
+
+    // 3. 如果还没找到，尝试只匹配表名部分（不含 schema 前缀）
+    if (!table) {
+      const baseName = tableName.includes('.') ? tableName.substring(tableName.indexOf('.') + 1) : tableName;
+      const matches = schema.tables.filter(t => {
+        const tBaseName = t.name.includes('.') ? t.name.substring(t.name.indexOf('.') + 1) : t.name;
+        return tBaseName.toLowerCase() === baseName.toLowerCase();
+      });
+      if (matches.length === 1) {
+        table = matches[0];
+      }
+    }
 
     if (!table) {
       throw new Error(`表 "${tableName}" 不存在`);
@@ -472,8 +496,24 @@ export class DatabaseService {
   /**
    * 引用标识符（表名、列名）
    * 根据数据库类型使用不同的引号
+   * 支持 schema.table 格式：自动拆分并分别引用
    */
   private quoteIdentifier(identifier: string): string {
+    // 检查是否包含 schema 限定（schema.table 格式）
+    const dotIndex = identifier.indexOf('.');
+    if (dotIndex > 0) {
+      const schema = identifier.substring(0, dotIndex);
+      const name = identifier.substring(dotIndex + 1);
+      return `${this.quoteSimpleIdentifier(schema)}.${this.quoteSimpleIdentifier(name)}`;
+    }
+
+    return this.quoteSimpleIdentifier(identifier);
+  }
+
+  /**
+   * 引用单个标识符（不含 schema 前缀）
+   */
+  private quoteSimpleIdentifier(identifier: string): string {
     const dbType = this.config.type;
 
     switch (dbType) {

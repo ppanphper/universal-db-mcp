@@ -188,6 +188,7 @@ export class SQLServerAdapter implements DbAdapter {
       // 批量获取所有表的列信息
       const allColumnsResult = await this.pool.request().query(`
         SELECT
+          c.TABLE_SCHEMA,
           c.TABLE_NAME,
           c.COLUMN_NAME,
           c.DATA_TYPE,
@@ -202,26 +203,27 @@ export class SQLServerAdapter implements DbAdapter {
           ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
         WHERE t.TABLE_TYPE = 'BASE TABLE'
           AND t.TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA')
-          AND t.TABLE_SCHEMA = SCHEMA_NAME()
         ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION
       `);
 
       // 批量获取所有表的主键信息
       const allPrimaryKeysResult = await this.pool.request().query(`
         SELECT
+          tc.TABLE_SCHEMA,
           tc.TABLE_NAME,
           c.COLUMN_NAME
         FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
         JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE c
           ON tc.CONSTRAINT_NAME = c.CONSTRAINT_NAME
         WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-          AND tc.TABLE_SCHEMA = SCHEMA_NAME()
+          AND tc.TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
         ORDER BY tc.TABLE_NAME
       `);
 
       // 批量获取所有表的索引信息
       const allIndexesResult = await this.pool.request().query(`
         SELECT
+          SCHEMA_NAME(t.schema_id) AS table_schema,
           t.name AS table_name,
           i.name AS index_name,
           c.name AS column_name,
@@ -232,13 +234,14 @@ export class SQLServerAdapter implements DbAdapter {
         INNER JOIN sys.tables t ON i.object_id = t.object_id
         WHERE i.is_primary_key = 0
           AND i.type > 0
-          AND t.schema_id = SCHEMA_ID()
+          AND SCHEMA_NAME(t.schema_id) NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
         ORDER BY t.name, i.name, ic.key_ordinal
       `);
 
       // 批量获取所有表的行数估算
       const allStatsResult = await this.pool.request().query(`
         SELECT
+          SCHEMA_NAME(t.schema_id) AS table_schema,
           t.name AS table_name,
           SUM(p.rows) AS row_count,
           ep.value AS table_comment
@@ -247,9 +250,9 @@ export class SQLServerAdapter implements DbAdapter {
         LEFT JOIN sys.extended_properties ep ON ep.major_id = t.object_id
           AND ep.minor_id = 0
           AND ep.name = 'MS_Description'
-        WHERE t.schema_id = SCHEMA_ID()
+        WHERE SCHEMA_NAME(t.schema_id) NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
           AND p.index_id IN (0, 1)
-        GROUP BY t.name, ep.value
+        GROUP BY SCHEMA_NAME(t.schema_id), t.name, ep.value
       `);
 
       // 批量获取所有外键信息
@@ -257,9 +260,11 @@ export class SQLServerAdapter implements DbAdapter {
       try {
         const allForeignKeysResult = await this.pool.request().query(`
           SELECT
+            SCHEMA_NAME(t.schema_id) AS table_schema,
             OBJECT_NAME(fk.parent_object_id) AS table_name,
             fk.name AS constraint_name,
             COL_NAME(fkc.parent_object_id, fkc.parent_column_id) AS column_name,
+            SCHEMA_NAME(OBJECT_SCHEMA_ID(fk.referenced_object_id)) AS ref_table_schema,
             OBJECT_NAME(fk.referenced_object_id) AS referenced_table,
             COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id) AS referenced_column,
             fk.delete_referential_action_desc AS delete_rule,
@@ -268,7 +273,7 @@ export class SQLServerAdapter implements DbAdapter {
           FROM sys.foreign_keys fk
           JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
           JOIN sys.tables t ON fk.parent_object_id = t.object_id
-          WHERE t.schema_id = SCHEMA_ID()
+          WHERE SCHEMA_NAME(t.schema_id) NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
           ORDER BY OBJECT_NAME(fk.parent_object_id), fk.name, fkc.constraint_column_id
         `);
         allForeignKeys = allForeignKeysResult.recordset || [];
@@ -293,6 +298,10 @@ export class SQLServerAdapter implements DbAdapter {
     }
   }
 
+  private makeTableKey(schemaName: string, tableName: string): string {
+    return schemaName === 'dbo' ? tableName : `${schemaName}.${tableName}`;
+  }
+
   /**
    * 组装 Schema 信息
    */
@@ -306,15 +315,18 @@ export class SQLServerAdapter implements DbAdapter {
     allForeignKeys: any[]
   ): SchemaInfo {
     const columnsByTable = new Map<string, ColumnInfo[]>();
+    const schemaByTable = new Map<string, string>();
 
     for (const col of allColumns) {
-      const tableName = col.TABLE_NAME;
+      const schema = col.TABLE_SCHEMA || 'dbo';
+      const tableKey = this.makeTableKey(schema, col.TABLE_NAME);
 
-      if (!columnsByTable.has(tableName)) {
-        columnsByTable.set(tableName, []);
+      if (!columnsByTable.has(tableKey)) {
+        columnsByTable.set(tableKey, []);
+        schemaByTable.set(tableKey, schema);
       }
 
-      columnsByTable.get(tableName)!.push({
+      columnsByTable.get(tableKey)!.push({
         name: col.COLUMN_NAME.toLowerCase(),
         type: this.formatSQLServerType(
           col.DATA_TYPE,
@@ -329,24 +341,26 @@ export class SQLServerAdapter implements DbAdapter {
 
     const primaryKeysByTable = new Map<string, string[]>();
     for (const pk of allPrimaryKeys) {
-      const tableName = pk.TABLE_NAME;
-      if (!primaryKeysByTable.has(tableName)) {
-        primaryKeysByTable.set(tableName, []);
+      const schema = pk.TABLE_SCHEMA || 'dbo';
+      const tableKey = this.makeTableKey(schema, pk.TABLE_NAME);
+      if (!primaryKeysByTable.has(tableKey)) {
+        primaryKeysByTable.set(tableKey, []);
       }
-      primaryKeysByTable.get(tableName)!.push(pk.COLUMN_NAME.toLowerCase());
+      primaryKeysByTable.get(tableKey)!.push(pk.COLUMN_NAME.toLowerCase());
     }
 
     const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
 
     for (const idx of allIndexes) {
-      const tableName = idx.table_name;
+      const schema = idx.table_schema || 'dbo';
+      const tableKey = this.makeTableKey(schema, idx.table_name);
       const indexName = idx.index_name;
 
-      if (!indexesByTable.has(tableName)) {
-        indexesByTable.set(tableName, new Map());
+      if (!indexesByTable.has(tableKey)) {
+        indexesByTable.set(tableKey, new Map());
       }
 
-      const tableIndexes = indexesByTable.get(tableName)!;
+      const tableIndexes = indexesByTable.get(tableKey)!;
 
       if (!tableIndexes.has(indexName)) {
         tableIndexes.set(indexName, {
@@ -361,9 +375,11 @@ export class SQLServerAdapter implements DbAdapter {
     const rowsByTable = new Map<string, number>();
     const commentsByTable = new Map<string, string>();
     for (const stat of allStats) {
-      rowsByTable.set(stat.table_name, stat.row_count || 0);
+      const schema = stat.table_schema || 'dbo';
+      const tableKey = this.makeTableKey(schema, stat.table_name);
+      rowsByTable.set(tableKey, stat.row_count || 0);
       if (stat.table_comment) {
-        commentsByTable.set(stat.table_name, String(stat.table_comment));
+        commentsByTable.set(tableKey, String(stat.table_comment));
       }
     }
 
@@ -372,21 +388,25 @@ export class SQLServerAdapter implements DbAdapter {
     const relationships: RelationshipInfo[] = [];
 
     for (const fk of allForeignKeys) {
-      const tableName = fk.table_name;
+      const schema = fk.table_schema || 'dbo';
+      const tableKey = this.makeTableKey(schema, fk.table_name);
       const constraintName = fk.constraint_name;
 
-      if (!tableName || !constraintName) continue;
+      if (!fk.table_name || !constraintName) continue;
 
-      if (!foreignKeysByTable.has(tableName)) {
-        foreignKeysByTable.set(tableName, new Map());
+      if (!foreignKeysByTable.has(tableKey)) {
+        foreignKeysByTable.set(tableKey, new Map());
       }
 
-      const tableForeignKeys = foreignKeysByTable.get(tableName)!;
+      const refSchema = fk.ref_table_schema || 'dbo';
+      const refTableKey = this.makeTableKey(refSchema, fk.referenced_table);
+
+      const tableForeignKeys = foreignKeysByTable.get(tableKey)!;
 
       if (!tableForeignKeys.has(constraintName)) {
         tableForeignKeys.set(constraintName, {
           columns: [],
-          referencedTable: fk.referenced_table,
+          referencedTable: refTableKey,
           referencedColumns: [],
           onDelete: fk.delete_rule,
           onUpdate: fk.update_rule,
@@ -399,10 +419,10 @@ export class SQLServerAdapter implements DbAdapter {
     }
 
     // 生成全局关系视图
-    for (const [tableName, tableForeignKeys] of foreignKeysByTable.entries()) {
+    for (const [tableKey, tableForeignKeys] of foreignKeysByTable.entries()) {
       for (const [constraintName, fkInfo] of tableForeignKeys.entries()) {
         relationships.push({
-          fromTable: tableName.toLowerCase(),
+          fromTable: tableKey.toLowerCase(),
           fromColumns: fkInfo.columns,
           toTable: fkInfo.referencedTable.toLowerCase(),
           toColumns: fkInfo.referencedColumns,
@@ -414,8 +434,8 @@ export class SQLServerAdapter implements DbAdapter {
 
     const tableInfos: TableInfo[] = [];
 
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableIndexes = indexesByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableIndexes = indexesByTable.get(tableKey);
       const indexInfos: IndexInfo[] = [];
 
       if (tableIndexes) {
@@ -429,7 +449,7 @@ export class SQLServerAdapter implements DbAdapter {
       }
 
       // 组装外键信息
-      const tableForeignKeys = foreignKeysByTable.get(tableName);
+      const tableForeignKeys = foreignKeysByTable.get(tableKey);
       const foreignKeyInfos: ForeignKeyInfo[] = [];
 
       if (tableForeignKeys) {
@@ -446,13 +466,14 @@ export class SQLServerAdapter implements DbAdapter {
       }
 
       tableInfos.push({
-        name: tableName.toLowerCase(),
-        comment: commentsByTable.get(tableName) || undefined,
+        name: tableKey.toLowerCase(),
+        schema: schemaByTable.get(tableKey),
+        comment: commentsByTable.get(tableKey) || undefined,
         columns,
-        primaryKeys: primaryKeysByTable.get(tableName) || [],
+        primaryKeys: primaryKeysByTable.get(tableKey) || [],
         indexes: indexInfos,
         foreignKeys: foreignKeyInfos.length > 0 ? foreignKeyInfos : undefined,
-        estimatedRows: rowsByTable.get(tableName) || 0,
+        estimatedRows: rowsByTable.get(tableKey) || 0,
       });
     }
 

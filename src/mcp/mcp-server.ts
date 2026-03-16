@@ -74,7 +74,7 @@ export class DatabaseMCPServer {
           },
           {
             name: 'get_schema',
-            description: '获取数据库结构信息，包括所有表名、列名、数据类型、主键、索引等元数据。在执行查询前调用此工具可以帮助理解数据库结构。结果会被缓存以提高性能。',
+            description: '获取数据库结构信息，包括所有 Schema 中用户可访问的表名、列名、数据类型、主键、索引等元数据。在执行查询前调用此工具可以帮助理解数据库结构。结果会被缓存以提高性能。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -93,7 +93,7 @@ export class DatabaseMCPServer {
               properties: {
                 tableName: {
                   type: 'string',
-                  description: '表名',
+                  description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。不指定 Schema 时查询默认 Schema。',
                 },
                 forceRefresh: {
                   type: 'boolean',
@@ -119,7 +119,7 @@ export class DatabaseMCPServer {
               properties: {
                 tableName: {
                   type: 'string',
-                  description: '表名',
+                  description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。',
                 },
                 columnName: {
                   type: 'string',
@@ -145,7 +145,7 @@ export class DatabaseMCPServer {
               properties: {
                 tableName: {
                   type: 'string',
-                  description: '表名',
+                  description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。',
                 },
                 columns: {
                   type: 'array',

@@ -163,9 +163,10 @@ export class KingbaseAdapter implements DbAdapter {
     const dbResult = await this.pool!.query('SELECT current_database()');
     const databaseName = dbResult.rows[0]?.current_database || this.config.database || 'unknown';
 
-    // 批量获取所有表的列信息
+    // 批量获取所有表的列信息（支持多 schema）
     const allColumnsResult = await this.pool!.query(`
       SELECT
+        c.table_schema,
         c.table_name,
         c.column_name,
         c.data_type,
@@ -178,14 +179,15 @@ export class KingbaseAdapter implements DbAdapter {
       FROM information_schema.columns c
       JOIN information_schema.tables t
         ON c.table_schema = t.table_schema AND c.table_name = t.table_name
-      WHERE c.table_schema = 'public'
+      WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
         AND t.table_type = 'BASE TABLE'
-      ORDER BY c.table_name, c.ordinal_position
+      ORDER BY c.table_schema, c.table_name, c.ordinal_position
     `);
 
     // 批量获取所有表的主键信息
     const allPrimaryKeysResult = await this.pool!.query(`
       SELECT
+        n.nspname as schema_name,
         t.relname as table_name,
         a.attname as column_name
       FROM pg_index i
@@ -193,13 +195,14 @@ export class KingbaseAdapter implements DbAdapter {
       JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(i.indkey)
       JOIN pg_namespace n ON n.oid = t.relnamespace
       WHERE i.indisprimary
-        AND n.nspname = 'public'
-      ORDER BY t.relname, a.attnum
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+      ORDER BY n.nspname, t.relname, a.attnum
     `);
 
     // 批量获取所有表的索引信息
     const allIndexesResult = await this.pool!.query(`
       SELECT
+        n.nspname as schema_name,
         t.relname as table_name,
         i.relname as index_name,
         a.attname as column_name,
@@ -210,21 +213,22 @@ export class KingbaseAdapter implements DbAdapter {
       JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
       JOIN pg_namespace n ON n.oid = t.relnamespace
       WHERE t.relkind = 'r'
-        AND n.nspname = 'public'
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
         AND NOT ix.indisprimary
-      ORDER BY t.relname, i.relname, a.attnum
+      ORDER BY n.nspname, t.relname, i.relname, a.attnum
     `);
 
     // 批量获取所有表的行数估算和表注释
     const allStatsResult = await this.pool!.query(`
       SELECT
+        n.nspname as schema_name,
         c.relname as table_name,
         c.reltuples::bigint as estimated_rows,
         obj_description(c.oid, 'pg_class') as table_comment
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE c.relkind = 'r'
-        AND n.nspname = 'public'
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
     `);
 
     // 批量获取所有外键信息
@@ -232,9 +236,11 @@ export class KingbaseAdapter implements DbAdapter {
     try {
       const allForeignKeysResult = await this.pool!.query(`
         SELECT
+          n.nspname AS schema_name,
           c.conname AS constraint_name,
           t.relname AS table_name,
           a.attname AS column_name,
+          rn.nspname AS ref_schema_name,
           rt.relname AS referenced_table,
           ra.attname AS referenced_column,
           CASE c.confdeltype
@@ -256,11 +262,12 @@ export class KingbaseAdapter implements DbAdapter {
         JOIN pg_class t ON t.oid = c.conrelid
         JOIN pg_class rt ON rt.oid = c.confrelid
         JOIN pg_namespace n ON n.oid = t.relnamespace
+        JOIN pg_namespace rn ON rn.oid = rt.relnamespace
         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
         JOIN pg_attribute ra ON ra.attrelid = rt.oid AND ra.attnum = c.confkey[array_position(c.conkey, a.attnum)]
         WHERE c.contype = 'f'
-          AND n.nspname = 'public'
-        ORDER BY t.relname, c.conname, array_position(c.conkey, a.attnum)
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+        ORDER BY n.nspname, t.relname, c.conname, array_position(c.conkey, a.attnum)
       `);
       allForeignKeys = allForeignKeysResult.rows;
     } catch (error) {
@@ -280,6 +287,13 @@ export class KingbaseAdapter implements DbAdapter {
   }
 
   /**
+   * 构建带 schema 前缀的表名键
+   */
+  private makeTableKey(schemaName: string, tableName: string): string {
+    return schemaName === 'public' ? tableName : `${schemaName}.${tableName}`;
+  }
+
+  /**
    * 组装 Schema 信息
    */
   private assembleSchema(
@@ -291,13 +305,18 @@ export class KingbaseAdapter implements DbAdapter {
     allStats: any[],
     allForeignKeys: any[]
   ): SchemaInfo {
+    // 按 schema.table 分组列信息
     const columnsByTable = new Map<string, ColumnInfo[]>();
+    const schemaByTable = new Map<string, string>();
 
     for (const col of allColumns) {
+      const schemaName = col.table_schema || 'public';
       const tableName = col.table_name;
+      const tableKey = this.makeTableKey(schemaName, tableName);
 
-      if (!columnsByTable.has(tableName)) {
-        columnsByTable.set(tableName, []);
+      if (!columnsByTable.has(tableKey)) {
+        columnsByTable.set(tableKey, []);
+        schemaByTable.set(tableKey, schemaName);
       }
 
       let dataType = col.data_type;
@@ -307,7 +326,7 @@ export class KingbaseAdapter implements DbAdapter {
         dataType += `(${col.numeric_precision}${col.numeric_scale ? `,${col.numeric_scale}` : ''})`;
       }
 
-      columnsByTable.get(tableName)!.push({
+      columnsByTable.get(tableKey)!.push({
         name: col.column_name,
         type: dataType,
         nullable: col.is_nullable === 'YES',
@@ -315,26 +334,28 @@ export class KingbaseAdapter implements DbAdapter {
       });
     }
 
+    // 按 schema.table 分组主键信息
     const primaryKeysByTable = new Map<string, string[]>();
     for (const pk of allPrimaryKeys) {
-      const tableName = pk.table_name;
-      if (!primaryKeysByTable.has(tableName)) {
-        primaryKeysByTable.set(tableName, []);
+      const tableKey = this.makeTableKey(pk.schema_name || 'public', pk.table_name);
+      if (!primaryKeysByTable.has(tableKey)) {
+        primaryKeysByTable.set(tableKey, []);
       }
-      primaryKeysByTable.get(tableName)!.push(pk.column_name);
+      primaryKeysByTable.get(tableKey)!.push(pk.column_name);
     }
 
+    // 按 schema.table 分组索引信息
     const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
 
     for (const idx of allIndexes) {
-      const tableName = idx.table_name;
+      const tableKey = this.makeTableKey(idx.schema_name || 'public', idx.table_name);
       const indexName = idx.index_name;
 
-      if (!indexesByTable.has(tableName)) {
-        indexesByTable.set(tableName, new Map());
+      if (!indexesByTable.has(tableKey)) {
+        indexesByTable.set(tableKey, new Map());
       }
 
-      const tableIndexes = indexesByTable.get(tableName)!;
+      const tableIndexes = indexesByTable.get(tableKey)!;
 
       if (!tableIndexes.has(indexName)) {
         tableIndexes.set(indexName, {
@@ -346,35 +367,38 @@ export class KingbaseAdapter implements DbAdapter {
       tableIndexes.get(indexName)!.columns.push(idx.column_name);
     }
 
+    // 按 schema.table 分组行数统计
     const rowsByTable = new Map<string, number>();
     const commentsByTable = new Map<string, string>();
     for (const stat of allStats) {
-      rowsByTable.set(stat.table_name, Number(stat.estimated_rows) || 0);
+      const tableKey = this.makeTableKey(stat.schema_name || 'public', stat.table_name);
+      rowsByTable.set(tableKey, Number(stat.estimated_rows) || 0);
       if (stat.table_comment) {
-        commentsByTable.set(stat.table_name, stat.table_comment);
+        commentsByTable.set(tableKey, stat.table_comment);
       }
     }
 
-    // 按表名分组外键信息
+    // 按 schema.table 分组外键信息
     const foreignKeysByTable = new Map<string, Map<string, { columns: string[]; referencedTable: string; referencedColumns: string[]; onDelete?: string; onUpdate?: string }>>();
     const relationships: RelationshipInfo[] = [];
 
     for (const fk of allForeignKeys) {
-      const tableName = fk.table_name;
+      const tableKey = this.makeTableKey(fk.schema_name || 'public', fk.table_name);
       const constraintName = fk.constraint_name;
+      const refTableKey = this.makeTableKey(fk.ref_schema_name || 'public', fk.referenced_table);
 
-      if (!tableName || !constraintName) continue;
+      if (!tableKey || !constraintName) continue;
 
-      if (!foreignKeysByTable.has(tableName)) {
-        foreignKeysByTable.set(tableName, new Map());
+      if (!foreignKeysByTable.has(tableKey)) {
+        foreignKeysByTable.set(tableKey, new Map());
       }
 
-      const tableForeignKeys = foreignKeysByTable.get(tableName)!;
+      const tableForeignKeys = foreignKeysByTable.get(tableKey)!;
 
       if (!tableForeignKeys.has(constraintName)) {
         tableForeignKeys.set(constraintName, {
           columns: [],
-          referencedTable: fk.referenced_table,
+          referencedTable: refTableKey,
           referencedColumns: [],
           onDelete: fk.delete_rule,
           onUpdate: fk.update_rule,
@@ -387,10 +411,10 @@ export class KingbaseAdapter implements DbAdapter {
     }
 
     // 生成全局关系视图
-    for (const [tableName, tableForeignKeys] of foreignKeysByTable.entries()) {
+    for (const [tableKey, tableForeignKeys] of foreignKeysByTable.entries()) {
       for (const [constraintName, fkInfo] of tableForeignKeys.entries()) {
         relationships.push({
-          fromTable: tableName,
+          fromTable: tableKey,
           fromColumns: fkInfo.columns,
           toTable: fkInfo.referencedTable,
           toColumns: fkInfo.referencedColumns,
@@ -400,10 +424,11 @@ export class KingbaseAdapter implements DbAdapter {
       }
     }
 
+    // 组装表信息
     const tableInfos: TableInfo[] = [];
 
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableIndexes = indexesByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableIndexes = indexesByTable.get(tableKey);
       const indexInfos: IndexInfo[] = [];
 
       if (tableIndexes) {
@@ -417,7 +442,7 @@ export class KingbaseAdapter implements DbAdapter {
       }
 
       // 组装外键信息
-      const tableForeignKeys = foreignKeysByTable.get(tableName);
+      const tableForeignKeys = foreignKeysByTable.get(tableKey);
       const foreignKeyInfos: ForeignKeyInfo[] = [];
 
       if (tableForeignKeys) {
@@ -434,16 +459,18 @@ export class KingbaseAdapter implements DbAdapter {
       }
 
       tableInfos.push({
-        name: tableName,
-        comment: commentsByTable.get(tableName) || undefined,
+        name: tableKey,
+        schema: schemaByTable.get(tableKey),
+        comment: commentsByTable.get(tableKey) || undefined,
         columns,
-        primaryKeys: primaryKeysByTable.get(tableName) || [],
+        primaryKeys: primaryKeysByTable.get(tableKey) || [],
         indexes: indexInfos,
         foreignKeys: foreignKeyInfos.length > 0 ? foreignKeyInfos : undefined,
-        estimatedRows: rowsByTable.get(tableName) || 0,
+        estimatedRows: rowsByTable.get(tableKey) || 0,
       });
     }
 
+    // 按表名排序
     tableInfos.sort((a, b) => a.name.localeCompare(b.name));
 
     return {

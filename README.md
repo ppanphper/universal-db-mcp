@@ -59,6 +59,7 @@ AI: Let me query that for you...
 - **Intelligent Caching** - Schema caching with configurable TTL for blazing-fast performance
 - **Batch Query Optimization** - Up to 100x faster schema retrieval for large databases
 - **Schema Enhancement** - Table comments, implicit relationship inference for better Text2SQL accuracy
+- **Multi-Schema Support** - Automatic discovery of all user schemas (PostgreSQL, SQL Server, Oracle, DM, and more)
 - **Data Masking** - Automatic sensitive data protection (phone, email, ID card, bank card, etc.)
 - **Connection Stability** - Connection pooling, TCP Keep-Alive, and automatic reconnection for long-running sessions
 

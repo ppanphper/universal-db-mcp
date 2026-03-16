@@ -2,6 +2,42 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.12.0] - 2026
+
+### 修复
+- **多 Schema 支持** - 修复 8 个适配器只能获取默认 Schema 下的表信息的问题
+  - **影响的适配器**：PostgreSQL、GaussDB、KingbaseES、Vastbase、HighGo、SQL Server、Oracle、达梦
+  - **问题表现**：`get_schema`、`get_table_info`、`get_enum_values`、`get_sample_data` 只返回默认 Schema（如 PostgreSQL 的 `public`、SQL Server 的 `dbo`、Oracle/达梦的当前用户）下的表
+  - **修复方案**：
+    - 适配器 SQL 查询改为排除系统 Schema，自动发现所有用户 Schema
+    - 非默认 Schema 的表名使用 `schema.table_name` 格式（如 `analytics.events`）
+    - 默认 Schema 的表名保持不变，向后兼容
+    - `get_table_info` 等工具支持 `schema.table_name` 格式精确指定表
+  - **核心服务层**：`DatabaseService.getTableInfo()` 新增 3 级表名匹配（精确匹配 → Schema 拆分匹配 → 基础名唯一匹配）
+  - **标识符引用**：`quoteIdentifier()` 支持自动拆分 `schema.table` 格式并分别引用
+
+#### 用户视角的变化
+
+**如果只使用默认 Schema（public/dbo/当前用户），使用体验完全不变。** 以下变化仅体现在拥有多 Schema 的数据库上。
+
+**之前**：假设 PostgreSQL 数据库中有 `public.users`、`public.orders`、`analytics.events`、`analytics.page_views` 四张表，调用 `get_schema` 只能看到 `users` 和 `orders`，`analytics` 下的表完全不可见。
+
+**现在**：调用 `get_schema` 可以看到全部四张表：`users`、`orders`、`analytics.events`、`analytics.page_views`。
+
+| 变化点 | 之前 | 现在 |
+|--------|------|------|
+| `get_schema` 返回的表 | 只有默认 Schema 的表 | 所有用户 Schema 的表 |
+| 非默认 Schema 表的命名 | 不可见 | `schema.table_name` 格式（如 `analytics.events`） |
+| 默认 Schema 表的命名 | `users` | `users`（不变） |
+| 查询非默认 Schema 的表 | 不支持 | 使用 `schema.table_name` 格式即可（如 `analytics.events`） |
+
+**新增能力**：
+- "查看 `analytics.events` 表的结构" → `get_table_info("analytics.events")`
+- "查看 `analytics.events` 表 `event_type` 列有哪些值" → `get_enum_values("analytics.events", "event_type")`
+- "查看 `analytics.events` 表的示例数据" → `get_sample_data("analytics.events")`
+
+**无需任何配置变更**：不需要修改启动参数、配置文件或学习新工具，升级后自动生效。
+
 ## [2.11.0] - 2026
 
 ### 改进

@@ -359,6 +359,11 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly_user;
 -- 设置默认权限
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT ON TABLES TO readonly_user;
+
+-- 如需访问其他 schema，需要额外授权
+-- GRANT USAGE ON SCHEMA analytics TO readonly_user;
+-- GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO readonly_user;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA analytics GRANT SELECT ON TABLES TO readonly_user;
 ```
 
 ### 3. 使用 SSL/TLS 连接
