@@ -5,6 +5,8 @@
  * dmdb 驱动会作为可选依赖自动安装
  *
  * 性能优化：使用批量查询获取 Schema 信息，避免 N+1 查询问题
+ *
+ * 连接管理：使用心跳保活 + 断线自动重连 + 操作自动重试，确保长连接稳定性
  */
 
 import type {
@@ -14,6 +16,8 @@ import type {
   TableInfo,
   ColumnInfo,
   IndexInfo,
+  ForeignKeyInfo,
+  RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 
@@ -41,6 +45,8 @@ async function loadDMDB() {
 
 export class DMAdapter implements DbAdapter {
   private connection: any = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private connectionConfig: any = null;
   private config: {
     host: string;
     port: number;
@@ -57,6 +63,44 @@ export class DMAdapter implements DbAdapter {
     database?: string;
   }) {
     this.config = config;
+  }
+
+  private isConnectionError(error: unknown): boolean {
+    const msg = String((error as any)?.message || '');
+    return /closed|ECONNRESET|EPIPE|ETIMEDOUT|ECONNREFUSED|网络|连接/.test(msg);
+  }
+
+  private async reconnect(): Promise<void> {
+    try {
+      if (this.connection) { try { await this.connection.close(); } catch {} this.connection = null; }
+      const DM = await loadDMDB();
+      this.connection = await DM.getConnection(this.connectionConfig);
+      console.error('达梦数据库重连成功');
+    } catch (error) {
+      console.error('达梦数据库重连失败:', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(async () => {
+      try {
+        if (this.connection) { await this.connection.execute('SELECT 1 FROM DUAL', []); }
+      } catch {
+        await this.reconnect();
+      }
+    }, 30000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
+    try { return await fn(); } catch (error) {
+      if (this.isConnectionError(error)) { await this.reconnect(); return await fn(); }
+      throw error;
+    }
   }
 
   /**
@@ -80,9 +124,11 @@ export class DMAdapter implements DbAdapter {
       };
 
       this.connection = await DM.getConnection(connectionConfig);
+      this.connectionConfig = connectionConfig;
 
       // 测试连接
       await this.connection.execute('SELECT 1 FROM DUAL', []);
+      this.startHeartbeat();
     } catch (error: any) {
       // 翻译常见错误
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -101,6 +147,7 @@ export class DMAdapter implements DbAdapter {
    * 断开数据库连接
    */
   async disconnect(): Promise<void> {
+    this.stopHeartbeat();
     if (this.connection) {
       try {
         await this.connection.close();
@@ -129,9 +176,9 @@ export class DMAdapter implements DbAdapter {
       }
 
       // 执行查询
-      const result = await this.connection.execute(cleanQuery, params || [], {
+      const result: any = await this.withRetry(() => this.connection.execute(cleanQuery, params || [], {
         autoCommit: false,
-      });
+      }));
 
       const executionTime = Date.now() - startTime;
 
@@ -197,6 +244,15 @@ export class DMAdapter implements DbAdapter {
     }
 
     try {
+      return await this.withRetry(() => this._getSchemaImpl());
+    } catch (error) {
+      throw new Error(
+        `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async _getSchemaImpl(): Promise<SchemaInfo> {
       // 获取达梦数据库版本
       const versionResult = await this.connection.execute(
         `SELECT BANNER FROM V$VERSION WHERE ROWNUM = 1`,
@@ -226,54 +282,92 @@ export class DMAdapter implements DbAdapter {
       const databaseName = schemaName || 'unknown';
 
       // 获取所有表的列信息
-      // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=DATA_TYPE, 3=DATA_LENGTH,
-      //        4=DATA_PRECISION, 5=DATA_SCALE, 6=NULLABLE, 7=DATA_DEFAULT, 8=COLUMN_ID
+      // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=DATA_TYPE, 4=DATA_LENGTH,
+      //        5=DATA_PRECISION, 6=DATA_SCALE, 7=NULLABLE, 8=DATA_DEFAULT, 9=COLUMN_ID
       const allColumnsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+        `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
                 DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
-         FROM USER_TAB_COLUMNS
-         ORDER BY TABLE_NAME, COLUMN_ID`,
+         FROM ALL_TAB_COLUMNS
+         WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+         ORDER BY OWNER, TABLE_NAME, COLUMN_ID`,
         []
       );
 
       // 获取所有列注释
-      // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=COMMENTS
+      // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=COMMENTS
       const allCommentsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
-         FROM USER_COL_COMMENTS
-         WHERE COMMENTS IS NOT NULL`,
+        `SELECT OWNER, TABLE_NAME, COLUMN_NAME, COMMENTS
+         FROM ALL_COL_COMMENTS
+         WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+           AND COMMENTS IS NOT NULL`,
         []
       );
 
       // 获取所有主键信息
-      // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=POSITION
+      // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=POSITION
       const allPrimaryKeysResult = await this.connection.execute(
-        `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
-         FROM USER_CONSTRAINTS cons
-         JOIN USER_CONS_COLUMNS cols
-           ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
+        `SELECT cons.OWNER, cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
+         FROM ALL_CONSTRAINTS cons
+         JOIN ALL_CONS_COLUMNS cols
+           ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME AND cons.OWNER = cols.OWNER
          WHERE cons.CONSTRAINT_TYPE = 'P'
-         ORDER BY cons.TABLE_NAME, cols.POSITION`,
+           AND cons.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+         ORDER BY cons.OWNER, cons.TABLE_NAME, cols.POSITION`,
         []
       );
 
       // 获取所有索引信息
-      // 列顺序: 0=TABLE_NAME, 1=INDEX_NAME, 2=UNIQUENESS, 3=COLUMN_NAME, 4=COLUMN_POSITION
+      // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=INDEX_NAME, 3=UNIQUENESS, 4=COLUMN_NAME, 5=COLUMN_POSITION
       const allIndexesResult = await this.connection.execute(
-        `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
-         FROM USER_INDEXES i
-         JOIN USER_IND_COLUMNS ic
-           ON i.INDEX_NAME = ic.INDEX_NAME
-         ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
+        `SELECT i.OWNER, i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+         FROM ALL_INDEXES i
+         JOIN ALL_IND_COLUMNS ic
+           ON i.INDEX_NAME = ic.INDEX_NAME AND i.OWNER = ic.INDEX_OWNER
+         WHERE i.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+         ORDER BY i.OWNER, i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
         []
       );
 
-      // 获取所有表的行数估算
-      // 列顺序: 0=TABLE_NAME, 1=NUM_ROWS
+      // 获取所有表的行数估算和表注释
+      // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=NUM_ROWS, 3=TABLE_COMMENT
       const allStatsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, NUM_ROWS FROM USER_TABLES`,
+        `SELECT t.OWNER, t.TABLE_NAME, t.NUM_ROWS, c.COMMENTS AS TABLE_COMMENT
+         FROM ALL_TABLES t
+         LEFT JOIN ALL_TAB_COMMENTS c ON t.TABLE_NAME = c.TABLE_NAME AND t.OWNER = c.OWNER
+         WHERE t.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')`,
         []
       );
+
+      // 获取所有外键信息
+      // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=CONSTRAINT_NAME, 3=COLUMN_NAME, 4=REFERENCED_TABLE,
+      //        5=REFERENCED_COLUMN, 6=DELETE_RULE, 7=REF_OWNER, 8=POSITION
+      let allForeignKeys: any[] = [];
+      try {
+        const allForeignKeysResult = await this.connection.execute(
+          `SELECT
+            c.OWNER,
+            c.TABLE_NAME,
+            c.CONSTRAINT_NAME,
+            cc.COLUMN_NAME,
+            rc.TABLE_NAME AS REFERENCED_TABLE,
+            rcc.COLUMN_NAME AS REFERENCED_COLUMN,
+            c.DELETE_RULE,
+            rc.OWNER AS REF_OWNER,
+            cc.POSITION
+          FROM ALL_CONSTRAINTS c
+          JOIN ALL_CONS_COLUMNS cc ON c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME AND c.OWNER = cc.OWNER
+          JOIN ALL_CONSTRAINTS rc ON c.R_CONSTRAINT_NAME = rc.CONSTRAINT_NAME AND c.R_OWNER = rc.OWNER
+          JOIN ALL_CONS_COLUMNS rcc ON rc.CONSTRAINT_NAME = rcc.CONSTRAINT_NAME AND rc.OWNER = rcc.OWNER AND cc.POSITION = rcc.POSITION
+          WHERE c.CONSTRAINT_TYPE = 'R'
+            AND c.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+          ORDER BY c.OWNER, c.TABLE_NAME, c.CONSTRAINT_NAME, cc.POSITION`,
+          []
+        );
+        allForeignKeys = allForeignKeysResult.rows || [];
+      } catch (error) {
+        // 外键查询失败时忽略，返回空数组
+        console.error('获取外键信息失败，跳过:', error instanceof Error ? error.message : String(error));
+      }
 
       return this.assembleSchemaFromIndexedRows(
         databaseName,
@@ -282,13 +376,10 @@ export class DMAdapter implements DbAdapter {
         allCommentsResult.rows || [],
         allPrimaryKeysResult.rows || [],
         allIndexesResult.rows || [],
-        allStatsResult.rows || []
+        allStatsResult.rows || [],
+        allForeignKeys,
+        schemaName
       );
-    } catch (error) {
-      throw new Error(
-        `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
   }
 
   /**
@@ -311,6 +402,10 @@ export class DMAdapter implements DbAdapter {
     return values.length > index ? values[index] : undefined;
   }
 
+  private makeTableKey(owner: string, tableName: string, currentUser: string): string {
+    return owner.toUpperCase() === currentUser.toUpperCase() ? tableName : `${owner}.${tableName}`;
+  }
+
   /**
    * 组装 Schema 信息（处理 dmdb 驱动返回的数字索引列名）
    */
@@ -321,33 +416,40 @@ export class DMAdapter implements DbAdapter {
     allComments: any[],
     allPrimaryKeys: any[],
     allIndexes: any[],
-    allStats: any[]
+    allStats: any[],
+    allForeignKeys: any[],
+    currentUser: string
   ): SchemaInfo {
     // 按表名分组列信息
-    // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=DATA_TYPE, 3=DATA_LENGTH,
-    //        4=DATA_PRECISION, 5=DATA_SCALE, 6=NULLABLE, 7=DATA_DEFAULT, 8=COLUMN_ID
+    // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=DATA_TYPE, 4=DATA_LENGTH,
+    //        5=DATA_PRECISION, 6=DATA_SCALE, 7=NULLABLE, 8=DATA_DEFAULT, 9=COLUMN_ID
     const columnsByTable = new Map<string, ColumnInfo[]>();
+    const schemaByTable = new Map<string, string>();
 
     for (const col of allColumns) {
-      const tableName = this.getValueByIndex(col, 0) as string;
-      const columnName = this.getValueByIndex(col, 1) as string;
-      const dataType = this.getValueByIndex(col, 2);
-      const dataLength = this.getValueByIndex(col, 3) as number;
-      const dataPrecision = this.getValueByIndex(col, 4) as number;
-      const dataScale = this.getValueByIndex(col, 5) as number;
-      const nullable = this.getValueByIndex(col, 6) as string;
-      const dataDefault = this.getValueByIndex(col, 7);
+      const owner = this.getValueByIndex(col, 0) as string;
+      const tableName = this.getValueByIndex(col, 1) as string;
+      const columnName = this.getValueByIndex(col, 2) as string;
+      const dataType = this.getValueByIndex(col, 3);
+      const dataLength = this.getValueByIndex(col, 4) as number;
+      const dataPrecision = this.getValueByIndex(col, 5) as number;
+      const dataScale = this.getValueByIndex(col, 6) as number;
+      const nullable = this.getValueByIndex(col, 7) as string;
+      const dataDefault = this.getValueByIndex(col, 8);
 
       // 跳过无效数据
       if (!tableName || !columnName) {
         continue;
       }
 
-      if (!columnsByTable.has(tableName)) {
-        columnsByTable.set(tableName, []);
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!columnsByTable.has(tableKey)) {
+        columnsByTable.set(tableKey, []);
+        schemaByTable.set(tableKey, owner);
       }
 
-      columnsByTable.get(tableName)!.push({
+      columnsByTable.get(tableKey)!.push({
         name: String(columnName).toLowerCase(),
         type: this.formatDMType(
           dataType as string | number | null | undefined,
@@ -361,30 +463,33 @@ export class DMAdapter implements DbAdapter {
     }
 
     // 按表名分组列注释
-    // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=COMMENTS
+    // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=COMMENTS
     const commentsByTable = new Map<string, Map<string, string>>();
     for (const comment of allComments) {
-      const tableName = this.getValueByIndex(comment, 0) as string;
-      const columnName = this.getValueByIndex(comment, 1) as string;
-      const comments = this.getValueByIndex(comment, 2) as string;
+      const owner = this.getValueByIndex(comment, 0) as string;
+      const tableName = this.getValueByIndex(comment, 1) as string;
+      const columnName = this.getValueByIndex(comment, 2) as string;
+      const comments = this.getValueByIndex(comment, 3) as string;
 
       // 跳过无效数据
       if (!tableName || !columnName || !comments) {
         continue;
       }
 
-      if (!commentsByTable.has(tableName)) {
-        commentsByTable.set(tableName, new Map());
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!commentsByTable.has(tableKey)) {
+        commentsByTable.set(tableKey, new Map());
       }
-      commentsByTable.get(tableName)!.set(
+      commentsByTable.get(tableKey)!.set(
         String(columnName).toLowerCase(),
         String(comments)
       );
     }
 
     // 将注释添加到列信息中
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableComments = commentsByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableComments = commentsByTable.get(tableKey);
       if (tableComments) {
         for (const col of columns) {
           if (tableComments.has(col.name)) {
@@ -395,32 +500,36 @@ export class DMAdapter implements DbAdapter {
     }
 
     // 按表名分组主键信息
-    // 列顺序: 0=TABLE_NAME, 1=COLUMN_NAME, 2=POSITION
+    // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=POSITION
     const primaryKeysByTable = new Map<string, string[]>();
     for (const pk of allPrimaryKeys) {
-      const tableName = this.getValueByIndex(pk, 0) as string;
-      const columnName = this.getValueByIndex(pk, 1) as string;
+      const owner = this.getValueByIndex(pk, 0) as string;
+      const tableName = this.getValueByIndex(pk, 1) as string;
+      const columnName = this.getValueByIndex(pk, 2) as string;
 
       // 跳过无效数据
       if (!tableName || !columnName) {
         continue;
       }
 
-      if (!primaryKeysByTable.has(tableName)) {
-        primaryKeysByTable.set(tableName, []);
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!primaryKeysByTable.has(tableKey)) {
+        primaryKeysByTable.set(tableKey, []);
       }
-      primaryKeysByTable.get(tableName)!.push(String(columnName).toLowerCase());
+      primaryKeysByTable.get(tableKey)!.push(String(columnName).toLowerCase());
     }
 
     // 按表名分组索引信息
-    // 列顺序: 0=TABLE_NAME, 1=INDEX_NAME, 2=UNIQUENESS, 3=COLUMN_NAME, 4=COLUMN_POSITION
+    // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=INDEX_NAME, 3=UNIQUENESS, 4=COLUMN_NAME, 5=COLUMN_POSITION
     const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
 
     for (const idx of allIndexes) {
-      const tableName = this.getValueByIndex(idx, 0) as string;
-      const indexName = this.getValueByIndex(idx, 1) as string;
-      const uniqueness = this.getValueByIndex(idx, 2) as string;
-      const columnName = this.getValueByIndex(idx, 3) as string;
+      const owner = this.getValueByIndex(idx, 0) as string;
+      const tableName = this.getValueByIndex(idx, 1) as string;
+      const indexName = this.getValueByIndex(idx, 2) as string;
+      const uniqueness = this.getValueByIndex(idx, 3) as string;
+      const columnName = this.getValueByIndex(idx, 4) as string;
 
       // 跳过无效数据
       if (!tableName || !indexName || !columnName) {
@@ -433,11 +542,13 @@ export class DMAdapter implements DbAdapter {
         continue;
       }
 
-      if (!indexesByTable.has(tableName)) {
-        indexesByTable.set(tableName, new Map());
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!indexesByTable.has(tableKey)) {
+        indexesByTable.set(tableKey, new Map());
       }
 
-      const tableIndexes = indexesByTable.get(tableName)!;
+      const tableIndexes = indexesByTable.get(tableKey)!;
 
       if (!tableIndexes.has(indexName)) {
         tableIndexes.set(indexName, {
@@ -450,21 +561,83 @@ export class DMAdapter implements DbAdapter {
     }
 
     // 按表名分组行数统计
-    // 列顺序: 0=TABLE_NAME, 1=NUM_ROWS
+    // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=NUM_ROWS, 3=TABLE_COMMENT
     const rowsByTable = new Map<string, number>();
+    const tableCommentsByTable = new Map<string, string>();
     for (const stat of allStats) {
-      const tableName = this.getValueByIndex(stat, 0) as string;
-      const numRows = this.getValueByIndex(stat, 1);
+      const owner = this.getValueByIndex(stat, 0) as string;
+      const tableName = this.getValueByIndex(stat, 1) as string;
+      const numRows = this.getValueByIndex(stat, 2);
+      const tableComment = this.getValueByIndex(stat, 3) as string;
       if (tableName) {
-        rowsByTable.set(tableName, Number(numRows) || 0);
+        const tableKey = this.makeTableKey(owner, tableName, currentUser);
+        rowsByTable.set(tableKey, Number(numRows) || 0);
+        if (tableComment) {
+          tableCommentsByTable.set(tableKey, tableComment);
+        }
+      }
+    }
+
+    // 按表名分组外键信息
+    // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=CONSTRAINT_NAME, 3=COLUMN_NAME, 4=REFERENCED_TABLE,
+    //        5=REFERENCED_COLUMN, 6=DELETE_RULE, 7=REF_OWNER, 8=POSITION
+    const foreignKeysByTable = new Map<string, Map<string, { columns: string[]; referencedTable: string; referencedColumns: string[]; onDelete?: string }>>();
+    const relationships: RelationshipInfo[] = [];
+
+    for (const fk of allForeignKeys) {
+      const owner = this.getValueByIndex(fk, 0) as string;
+      const tableName = this.getValueByIndex(fk, 1) as string;
+      const constraintName = this.getValueByIndex(fk, 2) as string;
+      const columnName = this.getValueByIndex(fk, 3) as string;
+      const referencedTable = this.getValueByIndex(fk, 4) as string;
+      const referencedColumn = this.getValueByIndex(fk, 5) as string;
+      const deleteRule = this.getValueByIndex(fk, 6) as string;
+      const refOwner = this.getValueByIndex(fk, 7) as string;
+
+      if (!tableName || !constraintName) continue;
+
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+      const refTableKey = this.makeTableKey(refOwner, referencedTable, currentUser);
+
+      if (!foreignKeysByTable.has(tableKey)) {
+        foreignKeysByTable.set(tableKey, new Map());
+      }
+
+      const tableForeignKeys = foreignKeysByTable.get(tableKey)!;
+
+      if (!tableForeignKeys.has(constraintName)) {
+        tableForeignKeys.set(constraintName, {
+          columns: [],
+          referencedTable: String(refTableKey).toLowerCase(),
+          referencedColumns: [],
+          onDelete: deleteRule,
+        });
+      }
+
+      const fkInfo = tableForeignKeys.get(constraintName)!;
+      fkInfo.columns.push(String(columnName).toLowerCase());
+      fkInfo.referencedColumns.push(String(referencedColumn).toLowerCase());
+    }
+
+    // 生成全局关系视图
+    for (const [tableKey, tableForeignKeys] of foreignKeysByTable.entries()) {
+      for (const [constraintName, fkInfo] of tableForeignKeys.entries()) {
+        relationships.push({
+          fromTable: String(tableKey).toLowerCase(),
+          fromColumns: fkInfo.columns,
+          toTable: fkInfo.referencedTable,
+          toColumns: fkInfo.referencedColumns,
+          type: 'many-to-one',
+          constraintName,
+        });
       }
     }
 
     // 组装表信息
     const tableInfos: TableInfo[] = [];
 
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableIndexes = indexesByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableIndexes = indexesByTable.get(tableKey);
       const indexInfos: IndexInfo[] = [];
 
       if (tableIndexes) {
@@ -477,12 +650,31 @@ export class DMAdapter implements DbAdapter {
         }
       }
 
+      // 组装外键信息
+      const tableForeignKeys = foreignKeysByTable.get(tableKey);
+      const foreignKeyInfos: ForeignKeyInfo[] = [];
+
+      if (tableForeignKeys) {
+        for (const [constraintName, fkData] of tableForeignKeys.entries()) {
+          foreignKeyInfos.push({
+            name: constraintName,
+            columns: fkData.columns,
+            referencedTable: fkData.referencedTable,
+            referencedColumns: fkData.referencedColumns,
+            onDelete: fkData.onDelete,
+          });
+        }
+      }
+
       tableInfos.push({
-        name: String(tableName).toLowerCase(),
+        name: String(tableKey).toLowerCase(),
+        schema: schemaByTable.get(tableKey),
+        comment: tableCommentsByTable.get(tableKey) || undefined,
         columns,
-        primaryKeys: primaryKeysByTable.get(tableName) || [],
+        primaryKeys: primaryKeysByTable.get(tableKey) || [],
         indexes: indexInfos,
-        estimatedRows: rowsByTable.get(tableName) || 0,
+        foreignKeys: foreignKeyInfos.length > 0 ? foreignKeyInfos : undefined,
+        estimatedRows: rowsByTable.get(tableKey) || 0,
       });
     }
 
@@ -494,6 +686,7 @@ export class DMAdapter implements DbAdapter {
       databaseName,
       tables: tableInfos,
       version,
+      relationships: relationships.length > 0 ? relationships : undefined,
     };
   }
 

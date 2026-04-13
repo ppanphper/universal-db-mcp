@@ -3,6 +3,8 @@
  * 所有数据库实现都必须遵循此接口，确保统一的调用方式
  */
 
+import type { SSHConfig } from './ssh.js';
+
 export interface DbAdapter {
   /**
    * 连接到数据库
@@ -25,10 +27,9 @@ export interface DbAdapter {
 
   /**
    * 获取数据库结构信息
-   * @param tableNames - 可选，指定要获取的表名列表。如果不传，则获取所有表。
    * @returns 数据库的表结构、索引等元数据
    */
-  getSchema(tableNames?: string[]): Promise<SchemaInfo>;
+  getSchema(): Promise<SchemaInfo>;
 
   /**
    * 检查查询是否为写操作
@@ -36,46 +37,6 @@ export interface DbAdapter {
    * @returns 如果是写操作返回 true
    */
   isWriteOperation(query: string): boolean;
-
-  // ========== 可选的扩展方法 ==========
-
-  /**
-   * 批量执行多条查询（可选）
-   * @param queries - 查询语句数组
-   * @returns 批量执行结果
-   */
-  batchExecute?(queries: string[]): Promise<BatchResult>;
-
-  /**
-   * 开始事务（可选）
-   */
-  beginTransaction?(): Promise<void>;
-
-  /**
-   * 提交事务（可选）
-   */
-  commit?(): Promise<void>;
-
-  /**
-   * 回滚事务（可选）
-   */
-  rollback?(): Promise<void>;
-
-  /**
-   * 执行查询返回单条记录（可选）
-   * @param query - SQL 查询语句
-   * @param params - 查询参数
-   * @returns 单条记录或 null
-   */
-  querySingle?(query: string, params?: unknown[]): Promise<Record<string, unknown> | null>;
-
-  /**
-   * 获取标量值（可选）
-   * @param query - SQL 查询语句
-   * @param params - 查询参数
-   * @returns 标量值
-   */
-  getScalar?(query: string, params?: unknown[]): Promise<unknown>;
 }
 
 /**
@@ -93,52 +54,39 @@ export interface QueryResult {
 }
 
 /**
- * 批量执行结果接口
- */
-export interface BatchResult {
-  /** 各查询的执行结果 */
-  results: QueryResult[];
-  /** 总受影响行数 */
-  totalAffectedRows: number;
-  /** 执行出错的查询 */
-  errors: Array<{
-    /** 查询索引 */
-    index: number;
-    /** 错误信息 */
-    error: string;
-    /** 原始查询 */
-    query: string;
-  }>;
-  /** 总执行时间（毫秒） */
-  totalExecutionTime: number;
-}
-
-/**
  * 数据库结构信息
  */
 export interface SchemaInfo {
   /** 数据库类型 */
-  databaseType: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb' | 'goldendb' | 'highgo' | 'vastbase';
+  databaseType: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb' | 'vastbase' | 'highgo' | 'goldendb';
   /** 数据库名称 */
   databaseName: string;
   /** 表信息列表 */
   tables: TableInfo[];
   /** 数据库版本 */
   version?: string;
+  /** 表间关系（全局视图，方便 LLM 理解表关联） */
+  relationships?: RelationshipInfo[];
 }
 
 /**
  * 表结构信息
  */
 export interface TableInfo {
-  /** 表名 */
+  /** 表名（非默认 schema 时格式为 schema.table_name） */
   name: string;
+  /** 所属 Schema（PG=schema, Oracle/DM=owner, SQLServer=schema） */
+  schema?: string;
+  /** 表注释/描述 */
+  comment?: string;
   /** 列信息 */
   columns: ColumnInfo[];
   /** 主键列名 */
   primaryKeys: string[];
   /** 索引信息 */
   indexes?: IndexInfo[];
+  /** 外键信息 */
+  foreignKeys?: ForeignKeyInfo[];
   /** 预估行数 */
   estimatedRows?: number;
 }
@@ -171,13 +119,61 @@ export interface IndexInfo {
   unique: boolean;
 }
 
-import type { SSHConfig } from './ssh.js';
+/**
+ * 外键信息
+ */
+export interface ForeignKeyInfo {
+  /** 外键约束名称 */
+  name: string;
+  /** 本表的外键列 */
+  columns: string[];
+  /** 引用的表名 */
+  referencedTable: string;
+  /** 引用的列名 */
+  referencedColumns: string[];
+  /** 删除时的动作 (CASCADE, SET NULL, NO ACTION, RESTRICT) */
+  onDelete?: string;
+  /** 更新时的动作 (CASCADE, SET NULL, NO ACTION, RESTRICT) */
+  onUpdate?: string;
+}
+
+/**
+ * 表间关系信息（全局视图）
+ */
+export interface RelationshipInfo {
+  /** 源表名 */
+  fromTable: string;
+  /** 源表的外键列 */
+  fromColumns: string[];
+  /** 目标表名 */
+  toTable: string;
+  /** 目标表的被引用列 */
+  toColumns: string[];
+  /** 关系类型 */
+  type: 'one-to-one' | 'one-to-many' | 'many-to-one';
+  /** 外键约束名称 */
+  constraintName?: string;
+  /** 关系来源：foreign_key=显式外键约束, inferred=基于命名规则推断 */
+  source?: 'foreign_key' | 'inferred';
+  /** 推断置信度 (0-1)，仅当 source='inferred' 时有效 */
+  confidence?: number;
+}
+
+/**
+ * 权限类型
+ */
+export type PermissionType = 'read' | 'insert' | 'update' | 'delete' | 'ddl';
+
+/**
+ * 权限模式
+ */
+export type PermissionMode = 'safe' | 'readwrite' | 'full' | 'custom';
 
 /**
  * 数据库连接配置
  */
 export interface DbConfig {
-  type: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb' | 'goldendb' | 'highgo' | 'vastbase';
+  type: 'mysql' | 'postgres' | 'redis' | 'oracle' | 'dm' | 'sqlserver' | 'mongodb' | 'sqlite' | 'kingbase' | 'gaussdb' | 'oceanbase' | 'tidb' | 'clickhouse' | 'polardb' | 'vastbase' | 'highgo' | 'goldendb';
   host?: string;
   port?: number;
   user?: string;
@@ -185,8 +181,54 @@ export interface DbConfig {
   database?: string;
   /** SQLite 数据库文件路径 */
   filePath?: string;
-  /** 是否允许写操作（默认 false，只读模式） */
+  /** 是否允许写操作（默认 false，只读模式）- 向后兼容，推荐使用 permissionMode */
   allowWrite?: boolean;
-  /** SSH 隧道配置 */
+  /** 权限模式：safe=只读, readwrite=读写不删, full=完全控制, custom=自定义 */
+  permissionMode?: PermissionMode;
+  /** 自定义权限列表，当 permissionMode='custom' 或直接指定时生效 */
+  permissions?: PermissionType[];
+  /** Oracle Instant Client 路径（启用 Thick 模式以支持 11g） */
+  oracleClientPath?: string;
+  /** 通过 SSH 隧道连接时的配置 */
   ssh?: SSHConfig;
+}
+
+/**
+ * 枚举值查询结果
+ * 用于 get_enum_values 工具返回
+ */
+export interface EnumValuesResult {
+  /** 表名 */
+  tableName: string;
+  /** 列名 */
+  columnName: string;
+  /** 所有唯一值 */
+  values: (string | number | null)[];
+  /** 唯一值总数 */
+  totalCount: number;
+  /** 是否适合作为枚举（唯一值数量 < limit，说明值是有限的） */
+  isEnum: boolean;
+  /** 每个值的出现次数（可选，当 includeCount=true 时返回） */
+  valueCounts?: Record<string, number>;
+  /** 列的数据类型 */
+  columnType?: string;
+}
+
+/**
+ * 示例数据查询结果
+ * 用于 get_sample_data 工具返回
+ */
+export interface SampleDataResult {
+  /** 表名 */
+  tableName: string;
+  /** 返回的列 */
+  columns: string[];
+  /** 示例数据行（已脱敏） */
+  rows: Record<string, unknown>[];
+  /** 返回行数 */
+  rowCount: number;
+  /** 是否已脱敏 */
+  masked: boolean;
+  /** 脱敏的列（仅当有列被脱敏时返回） */
+  maskedColumns?: string[];
 }

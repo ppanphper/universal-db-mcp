@@ -1,185 +1,71 @@
-# 中文文档索引
+# 文档中心
 
-本目录包含 Universal Database MCP Server 的所有中文文档。
+本目录包含 Universal DB MCP 的完整文档。
 
-## 📚 HTTP API 文档
+## 快速开始
 
-### API 参考
-- [API 参考文档（中文）](http-api/API_REFERENCE.zh-CN.md) - 完整的 API 端点文档，包含请求/响应示例
-- [API Reference (English)](http-api/API_REFERENCE.md) - Complete API endpoint documentation with request/response examples
+- [安装指南](./getting-started/installation.md) - 安装方式
+- [快速开始](./getting-started/quick-start.md) - 5 分钟上手
+- [配置说明](./getting-started/configuration.md) - 配置选项
+- [使用示例](./getting-started/examples.md) - 各数据库使用示例
 
-### 部署指南
-- [部署指南（中文）](http-api/DEPLOYMENT.zh-CN.md) - 7 种部署方式的详细指南
-- [Deployment Guide (English)](http-api/DEPLOYMENT.md) - Detailed guide for 7 deployment methods
+## 部署
 
-## 🔌 集成指南
+- [部署概览](./deployment/README.md) - 部署方式选择
+- [本地部署](./deployment/local.md) - Node.js、PM2、systemd
+- [Docker 部署](./deployment/docker.md) - Dockerfile、Docker Compose
+- [HTTPS 配置](./deployment/https-domain.md) - 域名和 SSL 证书
+- [云服务部署](./deployment/cloud/) - 华为云、阿里云、AWS、腾讯云
 
-### Coze 平台
-- [Coze 集成指南（中文）](integrations/COZE.zh-CN.md) - Coze 平台集成步骤和示例
-- [Coze Integration Guide (English)](integrations/COZE.md) - Coze platform integration steps and examples
+## 数据库
 
-### n8n 工作流
-- [n8n 集成指南（中文）](integrations/N8N.zh-CN.md) - n8n 工作流自动化集成
-- [n8n Integration Guide (English)](integrations/N8N.md) - n8n workflow automation integration
+- [数据库支持](./databases/README.md) - 支持的数据库列表
+- [MySQL](./databases/mysql.md)
+- [PostgreSQL](./databases/postgresql.md)
+- [Redis](./databases/redis.md)
+- [Oracle](./databases/oracle.md)
+- [SQL Server](./databases/sqlserver.md)
+- [MongoDB](./databases/mongodb.md)
+- [SQLite](./databases/sqlite.md)
+- [达梦](./databases/dameng.md)
+- [KingbaseES](./databases/kingbase.md)
+- [GaussDB](./databases/gaussdb.md)
+- [OceanBase](./databases/oceanbase.md)
+- [TiDB](./databases/tidb.md)
+- [ClickHouse](./databases/clickhouse.md)
+- [PolarDB](./databases/polardb.md)
+- [Vastbase](./databases/vastbase.md)
+- [HighGo](./databases/highgo.md)
+- [GoldenDB](./databases/goldendb.md)
 
-### Dify 应用
-- [Dify 集成指南（中文）](integrations/DIFY.zh-CN.md) - Dify AI 应用开发平台集成
-- [Dify Integration Guide (English)](integrations/DIFY.md) - Dify AI application platform integration
+## HTTP API
 
-## 🗄️ 数据库指南
+- [API 参考文档](./http-api/API_REFERENCE.zh-CN.md)
+- [部署指南](./http-api/DEPLOYMENT.zh-CN.md)
 
-以下数据库有专门的使用指南：
+## 第三方集成
 
-- [ClickHouse 使用指南](CLICKHOUSE_GUIDE.md)
-- [达梦数据库使用指南](DAMENG_GUIDE.md)
-- [GoldenDB 使用指南](GOLDENDB_GUIDE.md)
-- [HighGo（瀚高）使用指南](HIGHGO_GUIDE.md)
-- [MongoDB 使用指南](MONGODB_GUIDE.md)
-- [PolarDB 使用指南](POLARDB_GUIDE.md)
-- [SQL Server 使用指南](SQLSERVER_GUIDE.md)
-- [TiDB 使用指南](TIDB_GUIDE.md)
-- [Vastbase 使用指南](VASTBASE_GUIDE.md)
+- [Coze 集成](./integrations/COZE.zh-CN.md)
+- [n8n 集成](./integrations/N8N.zh-CN.md)
+- [Dify 集成](./integrations/DIFY.zh-CN.md)
 
-## 📖 快速开始
+## 使用指南
 
-### MCP 模式（Claude Desktop）
+- [安全最佳实践](./guides/security.md)
+- [多租户指南](./guides/multi-tenant.md)
 
-```bash
-# 安装
-npm install -g universal-db-mcp-plus
+## 开发
 
-# 配置 Claude Desktop
-# 编辑 claude_desktop_config.json
-{
-  "mcpServers": {
-    "mysql-db": {
-      "command": "npx",
-      "args": [
-        "universal-db-mcp-plus",
-        "--type", "mysql",
-        "--host", "localhost",
-        "--port", "3306",
-        "--user", "root",
-        "--password", "your_password",
-        "--database", "your_database"
-      ]
-    }
-  }
-}
-```
+- [架构说明](./development/architecture.md)
+- [添加新数据库](./development/adding-database.md)
+- [实现总结](./development/implementation.md)
+- [发布指南](./development/release.md)
 
-### HTTP API 模式
+## 运维
 
-```bash
-# 1. 配置环境变量
-export MODE=http
-export HTTP_PORT=3000
-export API_KEYS=your-secret-key
-
-# 2. 启动服务
-npm run start:http
-
-# 3. 测试 API
-curl http://localhost:3000/api/health
-```
-
-### Docker 部署
-
-```bash
-# 使用 Docker Compose
-cd docker
-docker-compose up -d
-
-# 或直接运行
-docker run -p 3000:3000 \
-  -e MODE=http \
-  -e API_KEYS=your-key \
-  universal-db-mcp-plus
-```
-
-## 🎯 支持的数据库
-
-本项目支持 **17 种**数据库类型：
-
-### 关系型数据库
-- MySQL
-- PostgreSQL
-- Oracle
-- SQL Server
-- SQLite
-
-### 国产数据库
-- 达梦（DM）
-- 人大金仓（KingbaseES）
-- 华为高斯（GaussDB/OpenGauss）
-- 瀚高（HighGo）
-- 中兴 GoldenDB
-- 海量数据 Vastbase
-
-### 分布式数据库
-- OceanBase
-- TiDB
-- PolarDB
-
-### 分析型数据库
-- ClickHouse
-
-### NoSQL 数据库
-- MongoDB
-- Redis
-
-## 🔒 安全特性
-
-- ✅ API Key 认证
-- ✅ CORS 配置
-- ✅ 速率限制
-- ✅ SQL 注入防护
-- ✅ 查询超时控制
-- ✅ 会话管理
-- ✅ 默认只读模式
-
-## 🚀 部署选项
-
-### 本地部署
-- Node.js 直接运行
-- PM2 进程管理
-- systemd 服务
-
-### 容器化部署
-- Docker
-- Docker Compose
-
-### Serverless 部署
-- 阿里云函数计算（Aliyun FC）
-- 腾讯云 SCF
-- AWS Lambda
-- Vercel
-
-### PaaS 平台部署
-- Railway
-- Render
-- Fly.io
-
-## 📞 获取帮助
-
-### 文档
-- [主 README](../README.md) - 项目概述和快速开始
-- [实现总结](../IMPLEMENTATION_SUMMARY.md) - 技术实现细节
-- [完成报告](../COMPLETION_REPORT.md) - 项目完成状态
-
-### 支持渠道
-- **GitHub Issues**: https://github.com/Anarkh-Lee/universal-db-mcp-plus/issues
-- **项目主页**: https://github.com/Anarkh-Lee/universal-db-mcp-plus
-
-## 🤝 贡献
-
-欢迎贡献！请查看 [CONTRIBUTING.md](../CONTRIBUTING.md) 了解如何参与项目。
-
-## 📄 许可证
-
-本项目采用 MIT 许可证。详见 [LICENSE](../LICENSE) 文件。
+- [运维指南](./operations/guide.md)
+- [故障排查](./operations/troubleshooting.md)
 
 ---
 
-**最后更新**: 2026-01-27
-**版本**: 1.0.0
+For English documentation, see [README.md](./README.md).

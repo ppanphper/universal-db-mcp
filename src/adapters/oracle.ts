@@ -3,6 +3,7 @@
  * 使用 oracledb 驱动实现 DbAdapter 接口
  *
  * 性能优化：使用批量查询获取 Schema 信息，避免 N+1 查询问题
+ * 连接管理：使用连接池 + 连接健康检测 + 断线自动重试，确保长连接稳定性
  */
 
 import oracledb from 'oracledb';
@@ -13,11 +14,13 @@ import type {
   TableInfo,
   ColumnInfo,
   IndexInfo,
+  ForeignKeyInfo,
+  RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 
 export class OracleAdapter implements DbAdapter {
-  private connection: oracledb.Connection | null = null;
+  private pool: oracledb.Pool | null = null;
   private config: {
     host: string;
     port: number;
@@ -27,7 +30,9 @@ export class OracleAdapter implements DbAdapter {
     serviceName?: string;
     sid?: string;
     connectString?: string;
+    oracleClientPath?: string;
   };
+  private static thickModeInitialized = false;
 
   constructor(config: {
     host: string;
@@ -38,11 +43,45 @@ export class OracleAdapter implements DbAdapter {
     serviceName?: string;
     sid?: string;
     connectString?: string;
+    oracleClientPath?: string;
   }) {
     this.config = config;
+
+    // 如果提供了 Oracle Client 路径，启用 Thick 模式（支持 11g）
+    if (config.oracleClientPath && !OracleAdapter.thickModeInitialized) {
+      try {
+        oracledb.initOracleClient({ libDir: config.oracleClientPath });
+        OracleAdapter.thickModeInitialized = true;
+        console.error(`🔧 Oracle Thick 模式已启用，Client 路径: ${config.oracleClientPath}`);
+      } catch (error: any) {
+        // 如果已经初始化过，忽略错误
+        if (error.message && error.message.includes('already initialized')) {
+          OracleAdapter.thickModeInitialized = true;
+        } else {
+          throw new Error(`Oracle Client 初始化失败: ${error.message || String(error)}`);
+        }
+      }
+    }
+
     // 配置 oracledb 全局设置
     oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
     oracledb.fetchAsString = [oracledb.CLOB];
+  }
+
+  private isConnectionError(error: unknown): boolean {
+    const msg = String((error as any)?.message || '');
+    const errNum = (error as any)?.errorNum;
+    return /NJS-003|NJS-500|NJS-521|DPI-1010|DPI-1080|ECONNRESET|EPIPE|ETIMEDOUT|ECONNREFUSED/.test(msg) ||
+      [3113, 3114, 3135, 12170, 12571, 28547].includes(errNum);
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
+    try { return await fn(); } catch (error) { if (this.isConnectionError(error)) { return await fn(); } throw error; }
+  }
+
+  private async withConnection<T>(fn: (conn: oracledb.Connection) => Promise<T>): Promise<T> {
+    const connection = await this.pool!.getConnection();
+    try { return await fn(connection); } finally { await connection.close(); }
   }
 
   /**
@@ -72,27 +111,23 @@ export class OracleAdapter implements DbAdapter {
   async connect(): Promise<void> {
     try {
       const connectionString = this.buildConnectionString();
-
-      this.connection = await oracledb.getConnection({
+      this.pool = await oracledb.createPool({
         user: this.config.user,
         password: this.config.password,
         connectString: connectionString,
+        poolMin: 1,
+        poolMax: 3,
+        poolTimeout: 60,
+        poolPingInterval: 30,
       });
-
       // 测试连接
-      await this.connection.execute('SELECT 1 FROM DUAL');
+      const connection = await this.pool.getConnection();
+      try { await connection.execute('SELECT 1 FROM DUAL'); } finally { await connection.close(); }
     } catch (error: any) {
-      // 翻译常见的 Oracle 错误
-      if (error.errorNum === 1017) {
-        throw new Error('Oracle 连接失败: 用户名或密码无效');
-      } else if (error.errorNum === 12154) {
-        throw new Error('Oracle 连接失败: 无法解析连接标识符，请检查 TNS 配置');
-      } else if (error.errorNum === 12541) {
-        throw new Error('Oracle 连接失败: TNS 无监听程序');
-      }
-      throw new Error(
-        `Oracle 连接失败: ${error instanceof Error ? error.message : String(error)}`
-      );
+      if (error.errorNum === 1017) throw new Error('Oracle 连接失败: 用户名或密码无效');
+      else if (error.errorNum === 12154) throw new Error('Oracle 连接失败: 无法解析连接标识符，请检查 TNS 配置');
+      else if (error.errorNum === 12541) throw new Error('Oracle 连接失败: TNS 无监听程序');
+      throw new Error(`Oracle 连接失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -100,13 +135,9 @@ export class OracleAdapter implements DbAdapter {
    * 断开数据库连接
    */
   async disconnect(): Promise<void> {
-    if (this.connection) {
-      try {
-        await this.connection.close();
-      } catch (error) {
-        // 忽略关闭连接时的错误
-      }
-      this.connection = null;
+    if (this.pool) {
+      try { await this.pool.close(0); } catch {}
+      this.pool = null;
     }
   }
 
@@ -114,69 +145,27 @@ export class OracleAdapter implements DbAdapter {
    * 执行 SQL 查询
    */
   async executeQuery(query: string, params?: unknown[]): Promise<QueryResult> {
-    if (!this.connection) {
-      throw new Error('数据库未连接');
-    }
-
+    if (!this.pool) throw new Error('数据库未连接');
     const startTime = Date.now();
-
     try {
-      // Oracle 不需要末尾的分号，移除它以避免 ORA-00933 错误
-      let cleanQuery = query.trim();
-      if (cleanQuery.endsWith(';')) {
-        cleanQuery = cleanQuery.slice(0, -1).trim();
-      }
-
-      // 执行查询，autoCommit 设置为 false（只读安全）
-      const result = await this.connection.execute(cleanQuery, params || [], {
-        autoCommit: false,
-        outFormat: oracledb.OUT_FORMAT_OBJECT,
-      });
-
-      const executionTime = Date.now() - startTime;
-
-      // 处理查询结果
-      if (result.rows && result.rows.length > 0) {
-        // SELECT 查询 - 将列名转换为小写
-        const rows = result.rows.map((row: any) => {
-          const lowerCaseRow: Record<string, unknown> = {};
-          for (const [key, value] of Object.entries(row)) {
-            lowerCaseRow[key.toLowerCase()] = value;
-          }
-          return lowerCaseRow;
-        });
-
-        return {
-          rows,
-          executionTime,
-          metadata: {
-            columnCount: result.metaData?.length || 0,
-          },
-        };
-      } else if (result.rowsAffected !== undefined && result.rowsAffected > 0) {
-        // DML 操作 (INSERT/UPDATE/DELETE)
-        return {
-          rows: [],
-          affectedRows: result.rowsAffected,
-          executionTime,
-        };
-      } else {
-        // 其他操作或空结果
-        return {
-          rows: [],
-          executionTime,
-        };
-      }
+      return await this.withRetry(() => this.withConnection(async (connection) => {
+        let cleanQuery = query.trim();
+        if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
+        const result = await connection.execute(cleanQuery, params || [], { autoCommit: false, outFormat: oracledb.OUT_FORMAT_OBJECT });
+        const executionTime = Date.now() - startTime;
+        if (result.rows && result.rows.length > 0) {
+          const rows = result.rows.map((row: any) => { const r: Record<string, unknown> = {}; for (const [k, v] of Object.entries(row)) { r[k.toLowerCase()] = v; } return r; });
+          return { rows, executionTime, metadata: { columnCount: result.metaData?.length || 0 } };
+        } else if (result.rowsAffected !== undefined && result.rowsAffected > 0) {
+          return { rows: [], affectedRows: result.rowsAffected, executionTime };
+        } else {
+          return { rows: [], executionTime };
+        }
+      }));
     } catch (error: any) {
-      // 翻译常见的 Oracle 错误
-      if (error.errorNum === 942) {
-        throw new Error('查询执行失败: 表或视图不存在');
-      } else if (error.errorNum === 1) {
-        throw new Error('查询执行失败: 违反唯一约束');
-      }
-      throw new Error(
-        `查询执行失败: ${error instanceof Error ? error.message : String(error)}`
-      );
+      if (error.errorNum === 942) throw new Error('查询执行失败: 表或视图不存在');
+      else if (error.errorNum === 1) throw new Error('查询执行失败: 违反唯一约束');
+      throw new Error(`查询执行失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -184,13 +173,23 @@ export class OracleAdapter implements DbAdapter {
    * 获取数据库结构信息（批量查询优化版本）
    */
   async getSchema(): Promise<SchemaInfo> {
-    if (!this.connection) {
+    if (!this.pool) {
       throw new Error('数据库未连接');
     }
 
     try {
+      return await this.withRetry(() => this._getSchemaImpl());
+    } catch (error) {
+      throw new Error(
+        `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async _getSchemaImpl(): Promise<SchemaInfo> {
+    return this.withConnection(async (connection) => {
       // 获取 Oracle 版本
-      const versionResult = await this.connection.execute(
+      const versionResult = await connection.execute(
         `SELECT banner FROM v$version WHERE banner LIKE 'Oracle%'`
       );
       const version = versionResult.rows?.[0]
@@ -198,59 +197,119 @@ export class OracleAdapter implements DbAdapter {
         : 'unknown';
 
       // 获取当前用户
-      const userResult = await this.connection.execute('SELECT USER FROM DUAL');
-      const databaseName = userResult.rows?.[0]
+      const userResult = await connection.execute('SELECT USER FROM DUAL');
+      const currentUser = userResult.rows?.[0]
         ? Object.values(userResult.rows[0])[0] as string
         : 'unknown';
+      const databaseName = currentUser;
 
       // 批量获取所有表的列信息
-      const allColumnsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+      const allColumnsResult = await connection.execute(
+        `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
                 DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
          FROM ALL_TAB_COLUMNS
-         WHERE OWNER = USER
+         WHERE OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
          ORDER BY TABLE_NAME, COLUMN_ID`
       );
 
       // 批量获取所有列注释
-      const allCommentsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, COMMENTS
+      const allCommentsResult = await connection.execute(
+        `SELECT OWNER, TABLE_NAME, COLUMN_NAME, COMMENTS
          FROM ALL_COL_COMMENTS
-         WHERE OWNER = USER
+         WHERE OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
            AND COMMENTS IS NOT NULL`
       );
 
       // 批量获取所有主键信息
-      const allPrimaryKeysResult = await this.connection.execute(
-        `SELECT cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
+      const allPrimaryKeysResult = await connection.execute(
+        `SELECT cons.OWNER, cons.TABLE_NAME, cols.COLUMN_NAME, cols.POSITION
          FROM ALL_CONSTRAINTS cons
          JOIN ALL_CONS_COLUMNS cols
            ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME
            AND cons.OWNER = cols.OWNER
          WHERE cons.CONSTRAINT_TYPE = 'P'
-           AND cons.OWNER = USER
+           AND cons.OWNER NOT IN (
+             'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+             'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+             'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+             'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+           )
          ORDER BY cons.TABLE_NAME, cols.POSITION`
       );
 
       // 批量获取所有索引信息
-      const allIndexesResult = await this.connection.execute(
-        `SELECT i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+      const allIndexesResult = await connection.execute(
+        `SELECT i.TABLE_OWNER AS OWNER, i.TABLE_NAME, i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
          FROM ALL_INDEXES i
          JOIN ALL_IND_COLUMNS ic
            ON i.INDEX_NAME = ic.INDEX_NAME
            AND i.OWNER = ic.INDEX_OWNER
-         WHERE i.OWNER = USER
+         WHERE i.OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
            AND i.INDEX_TYPE != 'LOB'
          ORDER BY i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`
       );
 
-      // 批量获取所有表的行数估算
-      const allStatsResult = await this.connection.execute(
-        `SELECT TABLE_NAME, NUM_ROWS
-         FROM ALL_TABLES
-         WHERE OWNER = USER
-           AND TEMPORARY = 'N'`
+      // 批量获取所有表的行数估算和表注释
+      const allStatsResult = await connection.execute(
+        `SELECT t.OWNER, t.TABLE_NAME, t.NUM_ROWS, c.COMMENTS AS TABLE_COMMENT
+         FROM ALL_TABLES t
+         LEFT JOIN ALL_TAB_COMMENTS c ON t.TABLE_NAME = c.TABLE_NAME AND t.OWNER = c.OWNER
+         WHERE t.OWNER NOT IN (
+           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+           'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+           'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+         )
+           AND t.TEMPORARY = 'N'`
       );
+
+      // 批量获取所有外键信息
+      let allForeignKeys: any[] = [];
+      try {
+        const allForeignKeysResult = await connection.execute(
+          `SELECT
+            c.OWNER,
+            c.TABLE_NAME,
+            c.CONSTRAINT_NAME,
+            cc.COLUMN_NAME,
+            rc.OWNER AS REF_OWNER,
+            rc.TABLE_NAME AS REFERENCED_TABLE,
+            rcc.COLUMN_NAME AS REFERENCED_COLUMN,
+            c.DELETE_RULE,
+            cc.POSITION
+          FROM ALL_CONSTRAINTS c
+          JOIN ALL_CONS_COLUMNS cc ON c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME AND c.OWNER = cc.OWNER
+          JOIN ALL_CONSTRAINTS rc ON c.R_CONSTRAINT_NAME = rc.CONSTRAINT_NAME AND c.R_OWNER = rc.OWNER
+          JOIN ALL_CONS_COLUMNS rcc ON rc.CONSTRAINT_NAME = rcc.CONSTRAINT_NAME AND rc.OWNER = rcc.OWNER AND cc.POSITION = rcc.POSITION
+          WHERE c.CONSTRAINT_TYPE = 'R'
+            AND c.OWNER NOT IN (
+              'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+              'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
+              'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
+              'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
+            )
+          ORDER BY c.TABLE_NAME, c.CONSTRAINT_NAME, cc.POSITION`
+        );
+        allForeignKeys = allForeignKeysResult.rows || [];
+      } catch (error) {
+        // 外键查询失败时忽略，返回空数组
+        console.error('获取外键信息失败，跳过:', error instanceof Error ? error.message : String(error));
+      }
 
       return this.assembleSchema(
         databaseName,
@@ -259,13 +318,15 @@ export class OracleAdapter implements DbAdapter {
         allCommentsResult.rows || [],
         allPrimaryKeysResult.rows || [],
         allIndexesResult.rows || [],
-        allStatsResult.rows || []
+        allStatsResult.rows || [],
+        allForeignKeys,
+        currentUser
       );
-    } catch (error) {
-      throw new Error(
-        `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+    });
+  }
+
+  private makeTableKey(owner: string, tableName: string, currentUser: string): string {
+    return owner === currentUser ? tableName : `${owner}.${tableName}`;
   }
 
   /**
@@ -278,12 +339,16 @@ export class OracleAdapter implements DbAdapter {
     allComments: any[],
     allPrimaryKeys: any[],
     allIndexes: any[],
-    allStats: any[]
+    allStats: any[],
+    allForeignKeys: any[],
+    currentUser: string
   ): SchemaInfo {
     // 按表名分组列信息
     const columnsByTable = new Map<string, ColumnInfo[]>();
+    const schemaByTable = new Map<string, string>();
 
     for (const col of allColumns) {
+      const owner = col.OWNER;
       const tableName = col.TABLE_NAME;
       const columnName = col.COLUMN_NAME;
 
@@ -292,11 +357,14 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!columnsByTable.has(tableName)) {
-        columnsByTable.set(tableName, []);
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!columnsByTable.has(tableKey)) {
+        columnsByTable.set(tableKey, []);
+        schemaByTable.set(tableKey, owner);
       }
 
-      columnsByTable.get(tableName)!.push({
+      columnsByTable.get(tableKey)!.push({
         name: columnName.toLowerCase(),
         type: this.formatOracleType(
           col.DATA_TYPE,
@@ -312,6 +380,7 @@ export class OracleAdapter implements DbAdapter {
     // 按表名分组列注释
     const commentsByTable = new Map<string, Map<string, string>>();
     for (const comment of allComments) {
+      const owner = comment.OWNER;
       const tableName = comment.TABLE_NAME;
       const columnName = comment.COLUMN_NAME;
       const comments = comment.COMMENTS;
@@ -321,18 +390,20 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!commentsByTable.has(tableName)) {
-        commentsByTable.set(tableName, new Map());
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!commentsByTable.has(tableKey)) {
+        commentsByTable.set(tableKey, new Map());
       }
-      commentsByTable.get(tableName)!.set(
+      commentsByTable.get(tableKey)!.set(
         columnName.toLowerCase(),
         comments
       );
     }
 
     // 将注释添加到列信息中
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableComments = commentsByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableComments = commentsByTable.get(tableKey);
       if (tableComments) {
         for (const col of columns) {
           if (tableComments.has(col.name)) {
@@ -345,6 +416,7 @@ export class OracleAdapter implements DbAdapter {
     // 按表名分组主键信息
     const primaryKeysByTable = new Map<string, string[]>();
     for (const pk of allPrimaryKeys) {
+      const owner = pk.OWNER;
       const tableName = pk.TABLE_NAME;
       const columnName = pk.COLUMN_NAME;
 
@@ -353,16 +425,19 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!primaryKeysByTable.has(tableName)) {
-        primaryKeysByTable.set(tableName, []);
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!primaryKeysByTable.has(tableKey)) {
+        primaryKeysByTable.set(tableKey, []);
       }
-      primaryKeysByTable.get(tableName)!.push(columnName.toLowerCase());
+      primaryKeysByTable.get(tableKey)!.push(columnName.toLowerCase());
     }
 
     // 按表名分组索引信息
     const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
 
     for (const idx of allIndexes) {
+      const owner = idx.OWNER;
       const tableName = idx.TABLE_NAME;
       const indexName = idx.INDEX_NAME;
       const columnName = idx.COLUMN_NAME;
@@ -377,11 +452,13 @@ export class OracleAdapter implements DbAdapter {
         continue;
       }
 
-      if (!indexesByTable.has(tableName)) {
-        indexesByTable.set(tableName, new Map());
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+
+      if (!indexesByTable.has(tableKey)) {
+        indexesByTable.set(tableKey, new Map());
       }
 
-      const tableIndexes = indexesByTable.get(tableName)!;
+      const tableIndexes = indexesByTable.get(tableKey)!;
 
       if (!tableIndexes.has(indexName)) {
         tableIndexes.set(indexName, {
@@ -395,18 +472,73 @@ export class OracleAdapter implements DbAdapter {
 
     // 按表名分组行数统计
     const rowsByTable = new Map<string, number>();
+    const tableCommentsByTable = new Map<string, string>();
     for (const stat of allStats) {
+      const owner = stat.OWNER;
       const tableName = stat.TABLE_NAME;
       if (tableName) {
-        rowsByTable.set(tableName, stat.NUM_ROWS || 0);
+        const tableKey = this.makeTableKey(owner, tableName, currentUser);
+        rowsByTable.set(tableKey, stat.NUM_ROWS || 0);
+        if (stat.TABLE_COMMENT) {
+          tableCommentsByTable.set(tableKey, stat.TABLE_COMMENT);
+        }
+      }
+    }
+
+    // 按表名分组外键信息
+    const foreignKeysByTable = new Map<string, Map<string, { columns: string[]; referencedTable: string; referencedColumns: string[]; onDelete?: string }>>();
+    const relationships: RelationshipInfo[] = [];
+
+    for (const fk of allForeignKeys) {
+      const owner = fk.OWNER;
+      const tableName = fk.TABLE_NAME;
+      const constraintName = fk.CONSTRAINT_NAME;
+
+      if (!tableName || !constraintName) continue;
+
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+      const refOwner = fk.REF_OWNER;
+      const refTableKey = this.makeTableKey(refOwner, fk.REFERENCED_TABLE, currentUser);
+
+      if (!foreignKeysByTable.has(tableKey)) {
+        foreignKeysByTable.set(tableKey, new Map());
+      }
+
+      const tableForeignKeys = foreignKeysByTable.get(tableKey)!;
+
+      if (!tableForeignKeys.has(constraintName)) {
+        tableForeignKeys.set(constraintName, {
+          columns: [],
+          referencedTable: refTableKey,
+          referencedColumns: [],
+          onDelete: fk.DELETE_RULE,
+        });
+      }
+
+      const fkInfo = tableForeignKeys.get(constraintName)!;
+      fkInfo.columns.push(String(fk.COLUMN_NAME).toLowerCase());
+      fkInfo.referencedColumns.push(String(fk.REFERENCED_COLUMN).toLowerCase());
+    }
+
+    // 生成全局关系视图
+    for (const [tableKey, tableForeignKeys] of foreignKeysByTable.entries()) {
+      for (const [constraintName, fkInfo] of tableForeignKeys.entries()) {
+        relationships.push({
+          fromTable: tableKey.toLowerCase(),
+          fromColumns: fkInfo.columns,
+          toTable: fkInfo.referencedTable.toLowerCase(),
+          toColumns: fkInfo.referencedColumns,
+          type: 'many-to-one',
+          constraintName,
+        });
       }
     }
 
     // 组装表信息（基于列信息构建，不依赖 ALL_TABLES 的结果）
     const tableInfos: TableInfo[] = [];
 
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableIndexes = indexesByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableIndexes = indexesByTable.get(tableKey);
       const indexInfos: IndexInfo[] = [];
 
       if (tableIndexes) {
@@ -419,12 +551,31 @@ export class OracleAdapter implements DbAdapter {
         }
       }
 
+      // 组装外键信息
+      const tableForeignKeys = foreignKeysByTable.get(tableKey);
+      const foreignKeyInfos: ForeignKeyInfo[] = [];
+
+      if (tableForeignKeys) {
+        for (const [constraintName, fkData] of tableForeignKeys.entries()) {
+          foreignKeyInfos.push({
+            name: constraintName,
+            columns: fkData.columns,
+            referencedTable: fkData.referencedTable.toLowerCase(),
+            referencedColumns: fkData.referencedColumns,
+            onDelete: fkData.onDelete,
+          });
+        }
+      }
+
       tableInfos.push({
-        name: tableName.toLowerCase(),
+        name: tableKey.toLowerCase(),
+        schema: schemaByTable.get(tableKey),
+        comment: tableCommentsByTable.get(tableKey) || undefined,
         columns,
-        primaryKeys: primaryKeysByTable.get(tableName) || [],
+        primaryKeys: primaryKeysByTable.get(tableKey) || [],
         indexes: indexInfos,
-        estimatedRows: rowsByTable.get(tableName) || 0,
+        foreignKeys: foreignKeyInfos.length > 0 ? foreignKeyInfos : undefined,
+        estimatedRows: rowsByTable.get(tableKey) || 0,
       });
     }
 
@@ -436,6 +587,7 @@ export class OracleAdapter implements DbAdapter {
       databaseName,
       tables: tableInfos,
       version,
+      relationships: relationships.length > 0 ? relationships : undefined,
     };
   }
 

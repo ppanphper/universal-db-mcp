@@ -15,7 +15,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { DbAdapter, DbConfig } from './types/adapter.js';
-import { validateQuery, loadDdlWhitelist } from './utils/safety.js';
+import { validateQuery } from './utils/safety.js';
 import { configService, connectionPool, sshTunnelService } from './services/index.js';
 
 /**
@@ -49,11 +49,6 @@ export class DatabaseMCPServer {
    */
   enableMultiDatabaseMode(): void {
     this.useMultiDatabase = true;
-    // 加载 DDL 白名单
-    const whitelist = configService.getDdlWhitelist();
-    if (whitelist.length > 0) {
-      loadDdlWhitelist(whitelist);
-    }
   }
 
   /**
@@ -319,7 +314,14 @@ export class DatabaseMCPServer {
             const { tableNames } = args as { tableNames?: string[] };
             console.error(`📋 获取数据库结构${tableNames ? ` (过滤: ${tableNames.length} 张表)` : ' (全量)'}...`);
             const adapter = await this.getCurrentAdapter();
-            const schema = await adapter.getSchema(tableNames);
+            const schema = await adapter.getSchema();
+
+            if (tableNames && tableNames.length > 0) {
+              const lowerNames = tableNames.map(n => n.toLowerCase());
+              schema.tables = schema.tables.filter(t =>
+                lowerNames.includes(t.name.toLowerCase())
+              );
+            }
 
             return {
               content: [
@@ -337,8 +339,10 @@ export class DatabaseMCPServer {
             console.error(`📄 获取表信息: ${tableName}`);
             const adapter = await this.getCurrentAdapter();
             // 优化：只获取指定表的 Schema，避免全量查询
-            const schema = await adapter.getSchema([tableName]);
-            const table = schema.tables.find(t => t.name === tableName);
+            const schema = await adapter.getSchema();
+            const table = schema.tables.find(t =>
+              t.name === tableName || t.name.toLowerCase() === tableName.toLowerCase()
+            );
 
             if (!table) {
               throw new Error(`表 "${tableName}" 不存在`);
@@ -737,11 +741,12 @@ export class DatabaseMCPServer {
               throw new Error('事务操作需要启用写入模式 (--danger-allow-write)');
             }
 
-            if (!adapter.beginTransaction) {
+            const adapterWithTx = adapter as DbAdapter & { beginTransaction?: () => Promise<void> };
+            if (!adapterWithTx.beginTransaction) {
               throw new Error('当前数据库类型不支持事务操作');
             }
 
-            await adapter.beginTransaction();
+            await adapterWithTx.beginTransaction();
 
             return {
               content: [
@@ -759,12 +764,13 @@ export class DatabaseMCPServer {
 
           case 'commit_transaction': {
             const adapter = await this.getCurrentAdapter();
+            const adapterWithTx = adapter as DbAdapter & { commit?: () => Promise<void> };
 
-            if (!adapter.commit) {
+            if (!adapterWithTx.commit) {
               throw new Error('当前数据库类型不支持事务操作');
             }
 
-            await adapter.commit();
+            await adapterWithTx.commit();
 
             return {
               content: [
@@ -781,12 +787,13 @@ export class DatabaseMCPServer {
 
           case 'rollback_transaction': {
             const adapter = await this.getCurrentAdapter();
+            const adapterWithTx = adapter as DbAdapter & { rollback?: () => Promise<void> };
 
-            if (!adapter.rollback) {
+            if (!adapterWithTx.rollback) {
               throw new Error('当前数据库类型不支持事务操作');
             }
 
-            await adapter.rollback();
+            await adapterWithTx.rollback();
 
             return {
               content: [

@@ -4,8 +4,10 @@
  * Shared between MCP and HTTP modes
  */
 
-import type { DbAdapter, DbConfig, QueryResult, SchemaInfo, TableInfo } from '../types/adapter.js';
+import type { DbAdapter, DbConfig, QueryResult, SchemaInfo, TableInfo, EnumValuesResult, SampleDataResult } from '../types/adapter.js';
 import { validateQuery } from '../utils/safety.js';
+import { SchemaEnhancer, SchemaEnhancerConfig } from '../utils/schema-enhancer.js';
+import { DataMasker, createDataMasker } from '../utils/data-masking.js';
 
 /**
  * Schema 缓存配置
@@ -16,6 +18,11 @@ export interface SchemaCacheConfig {
   /** 是否启用缓存，默认 true */
   enabled: boolean;
 }
+
+/**
+ * Schema 增强配置（导出供外部使用）
+ */
+export type { SchemaEnhancerConfig };
 
 /**
  * Schema 缓存统计信息
@@ -56,10 +63,23 @@ export class DatabaseService {
   private cacheHitCount: number = 0;
   private cacheMissCount: number = 0;
 
-  constructor(adapter: DbAdapter, config: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
+  // Schema 增强器
+  private schemaEnhancer: SchemaEnhancer;
+
+  // 数据脱敏器
+  private dataMasker: DataMasker;
+
+  constructor(
+    adapter: DbAdapter,
+    config: DbConfig,
+    cacheConfig?: Partial<SchemaCacheConfig>,
+    enhancerConfig?: Partial<SchemaEnhancerConfig>
+  ) {
     this.adapter = adapter;
     this.config = config;
     this.cacheConfig = { ...DEFAULT_CACHE_CONFIG, ...cacheConfig };
+    this.schemaEnhancer = new SchemaEnhancer(enhancerConfig);
+    this.dataMasker = createDataMasker(true);
   }
 
   /**
@@ -102,29 +122,87 @@ export class DatabaseService {
     const schema = await this.adapter.getSchema();
     const elapsed = Date.now() - startTime;
 
+    // 增强 Schema 信息（隐式关系推断、关系类型细化）
+    const enhancedSchema = this.enhanceSchema(schema);
+
     // 更新缓存
     if (this.cacheConfig.enabled) {
-      this.schemaCache = schema;
+      this.schemaCache = enhancedSchema;
       this.schemaCacheTime = now;
-      console.error(`✅ Schema 已缓存 (获取耗时: ${elapsed}ms, 表数量: ${schema.tables.length}, 缓存有效期: ${this.cacheConfig.ttl / 1000}秒)`);
+
+      // 统计增强信息
+      const explicitRelCount = schema.relationships?.length || 0;
+      const totalRelCount = enhancedSchema.relationships?.length || 0;
+      const inferredRelCount = totalRelCount - explicitRelCount;
+
+      console.error(`✅ Schema 已缓存 (获取耗时: ${elapsed}ms, 表数量: ${enhancedSchema.tables.length}, 显式关系: ${explicitRelCount}, 推断关系: ${inferredRelCount}, 缓存有效期: ${this.cacheConfig.ttl / 1000}秒)`);
     }
 
-    return schema;
+    return enhancedSchema;
+  }
+
+  /**
+   * 增强 Schema 信息
+   * - 为现有外键关系添加 source 标记
+   * - 推断隐式关系
+   * - 细化关系类型
+   */
+  private enhanceSchema(schema: SchemaInfo): SchemaInfo {
+    // 对于 NoSQL 数据库（Redis、MongoDB），不进行关系增强
+    if (schema.databaseType === 'redis' || schema.databaseType === 'mongodb') {
+      return schema;
+    }
+
+    // 增强关系信息
+    const existingRelationships = schema.relationships || [];
+    const enhancedRelationships = this.schemaEnhancer.enhanceRelationships(
+      schema.tables,
+      existingRelationships
+    );
+
+    return {
+      ...schema,
+      relationships: enhancedRelationships.length > 0 ? enhancedRelationships : undefined,
+    };
   }
 
   /**
    * Get information about a specific table
-   * @param tableName - 表名
+   * @param tableName - 表名（支持 schema.table_name 格式）
    * @param forceRefresh - 是否强制刷新缓存
    */
   async getTableInfo(tableName: string, forceRefresh: boolean = false): Promise<TableInfo> {
     const schema = await this.getSchema(forceRefresh);
 
-    // 支持大小写不敏感的表名匹配
-    const table = schema.tables.find(t =>
+    // 1. 精确匹配 name 字段（已包含 schema 前缀）
+    let table = schema.tables.find(t =>
       t.name === tableName ||
       t.name.toLowerCase() === tableName.toLowerCase()
     );
+
+    // 2. 如果没找到且包含点号，尝试用 schema + 表名组合匹配
+    if (!table && tableName.includes('.')) {
+      const dotIndex = tableName.indexOf('.');
+      const schemaName = tableName.substring(0, dotIndex);
+      const tblName = tableName.substring(dotIndex + 1);
+      table = schema.tables.find(t =>
+        t.schema?.toLowerCase() === schemaName.toLowerCase() &&
+        (t.name === tblName || t.name.toLowerCase() === tblName.toLowerCase() ||
+         t.name.toLowerCase() === tableName.toLowerCase())
+      );
+    }
+
+    // 3. 如果还没找到，尝试只匹配表名部分（不含 schema 前缀）
+    if (!table) {
+      const baseName = tableName.includes('.') ? tableName.substring(tableName.indexOf('.') + 1) : tableName;
+      const matches = schema.tables.filter(t => {
+        const tBaseName = t.name.includes('.') ? t.name.substring(t.name.indexOf('.') + 1) : t.name;
+        return tBaseName.toLowerCase() === baseName.toLowerCase();
+      });
+      if (matches.length === 1) {
+        table = matches[0];
+      }
+    }
 
     if (!table) {
       throw new Error(`表 "${tableName}" 不存在`);
@@ -198,10 +276,27 @@ export class DatabaseService {
   }
 
   /**
+   * 更新 Schema 增强配置
+   */
+  updateEnhancerConfig(config: Partial<SchemaEnhancerConfig>): void {
+    this.schemaEnhancer.updateConfig(config);
+    // 清除缓存以便下次获取时应用新配置
+    this.clearSchemaCache();
+    console.error(`⚙️ Schema 增强配置已更新`);
+  }
+
+  /**
+   * 获取 Schema 增强配置
+   */
+  getEnhancerConfig(): SchemaEnhancerConfig {
+    return this.schemaEnhancer.getConfig();
+  }
+
+  /**
    * Validate query against write permissions
    */
   private validateQuery(query: string): void {
-    validateQuery(query, this.config.allowWrite ?? false);
+    validateQuery(query, this.config);
   }
 
   /**
@@ -216,5 +311,250 @@ export class DatabaseService {
    */
   getConfig(): DbConfig {
     return this.config;
+  }
+
+  /**
+   * 获取指定列的枚举值
+   * 用于帮助 LLM 了解 status、type 等枚举列的所有可能值
+   *
+   * @param tableName - 表名
+   * @param columnName - 列名
+   * @param limit - 最大返回数量（默认 50，最大 100）
+   * @param includeCount - 是否包含每个值的出现次数（默认 false）
+   * @returns 枚举值查询结果
+   */
+  async getEnumValues(
+    tableName: string,
+    columnName: string,
+    limit: number = 50,
+    includeCount: boolean = false
+  ): Promise<EnumValuesResult> {
+    // 检查是否为 NoSQL 数据库
+    if (this.config.type === 'redis' || this.config.type === 'mongodb') {
+      throw new Error(
+        `${this.config.type} 是 NoSQL 数据库，不支持 get_enum_values 工具。` +
+        `请使用 execute_query 工具直接查询。`
+      );
+    }
+
+    // 1. 验证表和列是否存在
+    const tableInfo = await this.getTableInfo(tableName);
+    const column = tableInfo.columns.find(
+      c => c.name.toLowerCase() === columnName.toLowerCase()
+    );
+
+    if (!column) {
+      throw new Error(
+        `列 "${columnName}" 在表 "${tableName}" 中不存在。` +
+        `该表的列有: ${tableInfo.columns.map(c => c.name).join(', ')}`
+      );
+    }
+
+    // 使用实际的列名（保持原始大小写）
+    const actualColumnName = column.name;
+    const actualTableName = tableInfo.name;
+
+    // 2. 限制返回数量（安全限制）
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+
+    // 3. 构建查询 SQL
+    let query: string;
+    if (includeCount) {
+      query = this.buildEnumValuesQueryWithCount(actualTableName, actualColumnName, safeLimit + 1);
+    } else {
+      query = this.buildEnumValuesQuery(actualTableName, actualColumnName, safeLimit + 1);
+    }
+
+    // 4. 执行查询
+    const result = await this.adapter.executeQuery(query);
+
+    // 5. 处理结果
+    const hasMore = result.rows.length > safeLimit;
+    const rows = hasMore ? result.rows.slice(0, safeLimit) : result.rows;
+
+    const values = rows.map(row => row.value as string | number | null);
+    const valueCounts = includeCount
+      ? Object.fromEntries(rows.map(row => [String(row.value), Number(row.count)]))
+      : undefined;
+
+    return {
+      tableName: actualTableName,
+      columnName: actualColumnName,
+      values,
+      totalCount: values.length,
+      isEnum: !hasMore,
+      valueCounts,
+      columnType: column.type,
+    };
+  }
+
+  /**
+   * 获取表的示例数据（已脱敏）
+   * 用于帮助 LLM 理解数据格式（日期格式、ID 格式等）
+   *
+   * @param tableName - 表名
+   * @param columns - 要查看的列（可选，默认全部）
+   * @param limit - 返回行数（默认 3，最大 10）
+   * @returns 示例数据查询结果
+   */
+  async getSampleData(
+    tableName: string,
+    columns?: string[],
+    limit: number = 3
+  ): Promise<SampleDataResult> {
+    // 检查是否为 NoSQL 数据库
+    if (this.config.type === 'redis' || this.config.type === 'mongodb') {
+      throw new Error(
+        `${this.config.type} 是 NoSQL 数据库，不支持 get_sample_data 工具。` +
+        `请使用 execute_query 工具直接查询。`
+      );
+    }
+
+    // 1. 验证表是否存在
+    const tableInfo = await this.getTableInfo(tableName);
+    const actualTableName = tableInfo.name;
+
+    // 2. 验证并确定要查询的列
+    let selectedColumns: string[];
+    if (columns && columns.length > 0) {
+      const validColumns = tableInfo.columns.map(c => c.name.toLowerCase());
+      const invalidColumns = columns.filter(c => !validColumns.includes(c.toLowerCase()));
+      if (invalidColumns.length > 0) {
+        throw new Error(
+          `列 "${invalidColumns.join(', ')}" 在表 "${tableName}" 中不存在。` +
+          `该表的列有: ${tableInfo.columns.map(c => c.name).join(', ')}`
+        );
+      }
+      // 使用实际的列名（保持原始大小写）
+      selectedColumns = columns.map(c => {
+        const found = tableInfo.columns.find(col => col.name.toLowerCase() === c.toLowerCase());
+        return found ? found.name : c;
+      });
+    } else {
+      // 默认查询所有列
+      selectedColumns = tableInfo.columns.map(c => c.name);
+    }
+
+    // 3. 限制返回行数（安全限制）
+    const safeLimit = Math.min(Math.max(1, limit), 10);
+
+    // 4. 构建查询 SQL
+    const query = this.buildSampleDataQuery(actualTableName, selectedColumns, safeLimit);
+
+    // 5. 执行查询
+    const result = await this.adapter.executeQuery(query);
+
+    // 6. 脱敏处理
+    const { maskedRows, maskedColumns } = this.dataMasker.maskRows(result.rows);
+
+    return {
+      tableName: actualTableName,
+      columns: selectedColumns,
+      rows: maskedRows,
+      rowCount: maskedRows.length,
+      masked: maskedColumns.length > 0,
+      maskedColumns: maskedColumns.length > 0 ? maskedColumns : undefined,
+    };
+  }
+
+  /**
+   * 构建枚举值查询 SQL（不含计数）
+   */
+  private buildEnumValuesQuery(tableName: string, columnName: string, limit: number): string {
+    const quotedTable = this.quoteIdentifier(tableName);
+    const quotedColumn = this.quoteIdentifier(columnName);
+
+    const baseQuery = `SELECT DISTINCT ${quotedColumn} as value FROM ${quotedTable} WHERE ${quotedColumn} IS NOT NULL`;
+
+    return this.appendLimit(baseQuery, limit);
+  }
+
+  /**
+   * 构建枚举值查询 SQL（含计数）
+   */
+  private buildEnumValuesQueryWithCount(tableName: string, columnName: string, limit: number): string {
+    const quotedTable = this.quoteIdentifier(tableName);
+    const quotedColumn = this.quoteIdentifier(columnName);
+
+    const baseQuery = `SELECT ${quotedColumn} as value, COUNT(*) as count FROM ${quotedTable} WHERE ${quotedColumn} IS NOT NULL GROUP BY ${quotedColumn} ORDER BY count DESC`;
+
+    return this.appendLimit(baseQuery, limit);
+  }
+
+  /**
+   * 构建示例数据查询 SQL
+   */
+  private buildSampleDataQuery(tableName: string, columns: string[], limit: number): string {
+    const quotedTable = this.quoteIdentifier(tableName);
+    const quotedColumns = columns.map(c => this.quoteIdentifier(c)).join(', ');
+
+    const baseQuery = `SELECT ${quotedColumns} FROM ${quotedTable}`;
+
+    return this.appendLimit(baseQuery, limit);
+  }
+
+  /**
+   * 引用标识符（表名、列名）
+   * 根据数据库类型使用不同的引号
+   * 支持 schema.table 格式：自动拆分并分别引用
+   */
+  private quoteIdentifier(identifier: string): string {
+    // 检查是否包含 schema 限定（schema.table 格式）
+    const dotIndex = identifier.indexOf('.');
+    if (dotIndex > 0) {
+      const schema = identifier.substring(0, dotIndex);
+      const name = identifier.substring(dotIndex + 1);
+      return `${this.quoteSimpleIdentifier(schema)}.${this.quoteSimpleIdentifier(name)}`;
+    }
+
+    return this.quoteSimpleIdentifier(identifier);
+  }
+
+  /**
+   * 引用单个标识符（不含 schema 前缀）
+   */
+  private quoteSimpleIdentifier(identifier: string): string {
+    const dbType = this.config.type;
+
+    switch (dbType) {
+      case 'mysql':
+      case 'tidb':
+      case 'oceanbase':
+      case 'polardb':
+      case 'goldendb':
+        // MySQL 系使用反引号
+        return `\`${identifier}\``;
+
+      case 'sqlserver':
+        // SQL Server 使用方括号
+        return `[${identifier}]`;
+
+      default:
+        // PostgreSQL, Oracle, SQLite, 达梦, KingbaseES, GaussDB, Vastbase, HighGo, ClickHouse 等使用双引号
+        return `"${identifier}"`;
+    }
+  }
+
+  /**
+   * 添加 LIMIT 子句
+   * 根据数据库类型使用不同的语法
+   */
+  private appendLimit(query: string, limit: number): string {
+    const dbType = this.config.type;
+
+    switch (dbType) {
+      case 'oracle':
+      case 'dm':
+        // Oracle/达梦 使用 FETCH FIRST
+        return `${query} FETCH FIRST ${limit} ROWS ONLY`;
+
+      case 'sqlserver':
+        // SQL Server 使用 TOP（需要插入到 SELECT 后面）
+        return query.replace(/^SELECT/i, `SELECT TOP ${limit}`);
+
+      default:
+        // MySQL, PostgreSQL, SQLite, TiDB, ClickHouse 等使用 LIMIT
+        return `${query} LIMIT ${limit}`;
+    }
   }
 }

@@ -5,7 +5,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { TablesResponse, ApiResponse } from '../../types/http.js';
-import type { SchemaInfo, TableInfo } from '../../types/adapter.js';
+import type { SchemaInfo, TableInfo, EnumValuesResult, SampleDataResult } from '../../types/adapter.js';
 import { ConnectionManager } from '../../core/connection-manager.js';
 import type { SchemaCacheStats } from '../../core/database-service.js';
 
@@ -307,6 +307,139 @@ export async function setupSchemaRoutes(
         error: {
           code: 'GET_CACHE_STATUS_FAILED',
           message: error instanceof Error ? error.message : 'Failed to get cache status',
+        },
+        metadata: {
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        },
+      };
+    }
+  });
+
+  /**
+   * GET /api/enum-values
+   * Get all unique values for a column (for enum-type columns)
+   */
+  fastify.get<{
+    Querystring: {
+      sessionId: string;
+      tableName: string;
+      columnName: string;
+      limit?: string;
+      includeCount?: string;
+    };
+    Reply: ApiResponse<EnumValuesResult>;
+  }>('/api/enum-values', {
+    schema: {
+      querystring: {
+        type: 'object',
+        required: ['sessionId', 'tableName', 'columnName'],
+        properties: {
+          sessionId: { type: 'string' },
+          tableName: { type: 'string', description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。' },
+          columnName: { type: 'string', description: '列名' },
+          limit: { type: 'string', description: '最大返回数量（默认 50，最大 100）' },
+          includeCount: { type: 'string', description: '是否包含每个值的出现次数 (true/false)' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { sessionId, tableName, columnName, limit, includeCount } = request.query;
+      const limitNum = limit ? parseInt(limit, 10) : undefined;
+      const shouldIncludeCount = includeCount === 'true';
+
+      // Get database service
+      const service = connectionManager.getService(sessionId);
+
+      // Get enum values
+      const result = await service.getEnumValues(
+        tableName,
+        columnName,
+        limitNum,
+        shouldIncludeCount
+      );
+
+      return {
+        success: true,
+        data: result,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        },
+      };
+    } catch (error) {
+      reply.code(500);
+      return {
+        success: false,
+        error: {
+          code: 'GET_ENUM_VALUES_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to get enum values',
+        },
+        metadata: {
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        },
+      };
+    }
+  });
+
+  /**
+   * GET /api/sample-data
+   * Get sample data from a table (with automatic data masking)
+   */
+  fastify.get<{
+    Querystring: {
+      sessionId: string;
+      tableName: string;
+      columns?: string;
+      limit?: string;
+    };
+    Reply: ApiResponse<SampleDataResult>;
+  }>('/api/sample-data', {
+    schema: {
+      querystring: {
+        type: 'object',
+        required: ['sessionId', 'tableName'],
+        properties: {
+          sessionId: { type: 'string' },
+          tableName: { type: 'string', description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。' },
+          columns: { type: 'string', description: '要查看的列（逗号分隔，可选）' },
+          limit: { type: 'string', description: '返回行数（默认 3，最大 10）' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { sessionId, tableName, columns, limit } = request.query;
+      const limitNum = limit ? parseInt(limit, 10) : undefined;
+      const columnList = columns ? columns.split(',').map(c => c.trim()) : undefined;
+
+      // Get database service
+      const service = connectionManager.getService(sessionId);
+
+      // Get sample data
+      const result = await service.getSampleData(
+        tableName,
+        columnList,
+        limitNum
+      );
+
+      return {
+        success: true,
+        data: result,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        },
+      };
+    } catch (error) {
+      reply.code(500);
+      return {
+        success: false,
+        error: {
+          code: 'GET_SAMPLE_DATA_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to get sample data',
         },
         metadata: {
           timestamp: new Date().toISOString(),

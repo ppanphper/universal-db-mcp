@@ -14,6 +14,8 @@ import type {
   TableInfo,
   ColumnInfo,
   IndexInfo,
+  ForeignKeyInfo,
+  RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 
@@ -186,6 +188,7 @@ export class SQLServerAdapter implements DbAdapter {
       // 批量获取所有表的列信息
       const allColumnsResult = await this.pool.request().query(`
         SELECT
+          c.TABLE_SCHEMA,
           c.TABLE_NAME,
           c.COLUMN_NAME,
           c.DATA_TYPE,
@@ -200,26 +203,27 @@ export class SQLServerAdapter implements DbAdapter {
           ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
         WHERE t.TABLE_TYPE = 'BASE TABLE'
           AND t.TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA')
-          AND t.TABLE_SCHEMA = SCHEMA_NAME()
         ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION
       `);
 
       // 批量获取所有表的主键信息
       const allPrimaryKeysResult = await this.pool.request().query(`
         SELECT
+          tc.TABLE_SCHEMA,
           tc.TABLE_NAME,
           c.COLUMN_NAME
         FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
         JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE c
           ON tc.CONSTRAINT_NAME = c.CONSTRAINT_NAME
         WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-          AND tc.TABLE_SCHEMA = SCHEMA_NAME()
+          AND tc.TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
         ORDER BY tc.TABLE_NAME
       `);
 
       // 批量获取所有表的索引信息
       const allIndexesResult = await this.pool.request().query(`
         SELECT
+          SCHEMA_NAME(t.schema_id) AS table_schema,
           t.name AS table_name,
           i.name AS index_name,
           c.name AS column_name,
@@ -230,21 +234,53 @@ export class SQLServerAdapter implements DbAdapter {
         INNER JOIN sys.tables t ON i.object_id = t.object_id
         WHERE i.is_primary_key = 0
           AND i.type > 0
-          AND t.schema_id = SCHEMA_ID()
+          AND SCHEMA_NAME(t.schema_id) NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
         ORDER BY t.name, i.name, ic.key_ordinal
       `);
 
       // 批量获取所有表的行数估算
       const allStatsResult = await this.pool.request().query(`
         SELECT
+          SCHEMA_NAME(t.schema_id) AS table_schema,
           t.name AS table_name,
-          SUM(p.rows) AS row_count
+          SUM(p.rows) AS row_count,
+          ep.value AS table_comment
         FROM sys.partitions p
         JOIN sys.tables t ON p.object_id = t.object_id
-        WHERE t.schema_id = SCHEMA_ID()
+        LEFT JOIN sys.extended_properties ep ON ep.major_id = t.object_id
+          AND ep.minor_id = 0
+          AND ep.name = 'MS_Description'
+        WHERE SCHEMA_NAME(t.schema_id) NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
           AND p.index_id IN (0, 1)
-        GROUP BY t.name
+        GROUP BY SCHEMA_NAME(t.schema_id), t.name, ep.value
       `);
+
+      // 批量获取所有外键信息
+      let allForeignKeys: any[] = [];
+      try {
+        const allForeignKeysResult = await this.pool.request().query(`
+          SELECT
+            SCHEMA_NAME(t.schema_id) AS table_schema,
+            OBJECT_NAME(fk.parent_object_id) AS table_name,
+            fk.name AS constraint_name,
+            COL_NAME(fkc.parent_object_id, fkc.parent_column_id) AS column_name,
+            SCHEMA_NAME(OBJECT_SCHEMA_ID(fk.referenced_object_id)) AS ref_table_schema,
+            OBJECT_NAME(fk.referenced_object_id) AS referenced_table,
+            COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id) AS referenced_column,
+            fk.delete_referential_action_desc AS delete_rule,
+            fk.update_referential_action_desc AS update_rule,
+            fkc.constraint_column_id AS column_position
+          FROM sys.foreign_keys fk
+          JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+          JOIN sys.tables t ON fk.parent_object_id = t.object_id
+          WHERE SCHEMA_NAME(t.schema_id) NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
+          ORDER BY OBJECT_NAME(fk.parent_object_id), fk.name, fkc.constraint_column_id
+        `);
+        allForeignKeys = allForeignKeysResult.recordset || [];
+      } catch (error) {
+        // 外键查询失败时忽略，返回空数组
+        console.error('获取外键信息失败，跳过:', error instanceof Error ? error.message : String(error));
+      }
 
       return this.assembleSchema(
         databaseName,
@@ -252,13 +288,18 @@ export class SQLServerAdapter implements DbAdapter {
         allColumnsResult.recordset || [],
         allPrimaryKeysResult.recordset || [],
         allIndexesResult.recordset || [],
-        allStatsResult.recordset || []
+        allStatsResult.recordset || [],
+        allForeignKeys
       );
     } catch (error) {
       throw new Error(
         `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  private makeTableKey(schemaName: string, tableName: string): string {
+    return schemaName === 'dbo' ? tableName : `${schemaName}.${tableName}`;
   }
 
   /**
@@ -270,18 +311,22 @@ export class SQLServerAdapter implements DbAdapter {
     allColumns: any[],
     allPrimaryKeys: any[],
     allIndexes: any[],
-    allStats: any[]
+    allStats: any[],
+    allForeignKeys: any[]
   ): SchemaInfo {
     const columnsByTable = new Map<string, ColumnInfo[]>();
+    const schemaByTable = new Map<string, string>();
 
     for (const col of allColumns) {
-      const tableName = col.TABLE_NAME;
+      const schema = col.TABLE_SCHEMA || 'dbo';
+      const tableKey = this.makeTableKey(schema, col.TABLE_NAME);
 
-      if (!columnsByTable.has(tableName)) {
-        columnsByTable.set(tableName, []);
+      if (!columnsByTable.has(tableKey)) {
+        columnsByTable.set(tableKey, []);
+        schemaByTable.set(tableKey, schema);
       }
 
-      columnsByTable.get(tableName)!.push({
+      columnsByTable.get(tableKey)!.push({
         name: col.COLUMN_NAME.toLowerCase(),
         type: this.formatSQLServerType(
           col.DATA_TYPE,
@@ -296,24 +341,26 @@ export class SQLServerAdapter implements DbAdapter {
 
     const primaryKeysByTable = new Map<string, string[]>();
     for (const pk of allPrimaryKeys) {
-      const tableName = pk.TABLE_NAME;
-      if (!primaryKeysByTable.has(tableName)) {
-        primaryKeysByTable.set(tableName, []);
+      const schema = pk.TABLE_SCHEMA || 'dbo';
+      const tableKey = this.makeTableKey(schema, pk.TABLE_NAME);
+      if (!primaryKeysByTable.has(tableKey)) {
+        primaryKeysByTable.set(tableKey, []);
       }
-      primaryKeysByTable.get(tableName)!.push(pk.COLUMN_NAME.toLowerCase());
+      primaryKeysByTable.get(tableKey)!.push(pk.COLUMN_NAME.toLowerCase());
     }
 
     const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
 
     for (const idx of allIndexes) {
-      const tableName = idx.table_name;
+      const schema = idx.table_schema || 'dbo';
+      const tableKey = this.makeTableKey(schema, idx.table_name);
       const indexName = idx.index_name;
 
-      if (!indexesByTable.has(tableName)) {
-        indexesByTable.set(tableName, new Map());
+      if (!indexesByTable.has(tableKey)) {
+        indexesByTable.set(tableKey, new Map());
       }
 
-      const tableIndexes = indexesByTable.get(tableName)!;
+      const tableIndexes = indexesByTable.get(tableKey)!;
 
       if (!tableIndexes.has(indexName)) {
         tableIndexes.set(indexName, {
@@ -326,14 +373,69 @@ export class SQLServerAdapter implements DbAdapter {
     }
 
     const rowsByTable = new Map<string, number>();
+    const commentsByTable = new Map<string, string>();
     for (const stat of allStats) {
-      rowsByTable.set(stat.table_name, stat.row_count || 0);
+      const schema = stat.table_schema || 'dbo';
+      const tableKey = this.makeTableKey(schema, stat.table_name);
+      rowsByTable.set(tableKey, stat.row_count || 0);
+      if (stat.table_comment) {
+        commentsByTable.set(tableKey, String(stat.table_comment));
+      }
+    }
+
+    // 按表名分组外键信息
+    const foreignKeysByTable = new Map<string, Map<string, { columns: string[]; referencedTable: string; referencedColumns: string[]; onDelete?: string; onUpdate?: string }>>();
+    const relationships: RelationshipInfo[] = [];
+
+    for (const fk of allForeignKeys) {
+      const schema = fk.table_schema || 'dbo';
+      const tableKey = this.makeTableKey(schema, fk.table_name);
+      const constraintName = fk.constraint_name;
+
+      if (!fk.table_name || !constraintName) continue;
+
+      if (!foreignKeysByTable.has(tableKey)) {
+        foreignKeysByTable.set(tableKey, new Map());
+      }
+
+      const refSchema = fk.ref_table_schema || 'dbo';
+      const refTableKey = this.makeTableKey(refSchema, fk.referenced_table);
+
+      const tableForeignKeys = foreignKeysByTable.get(tableKey)!;
+
+      if (!tableForeignKeys.has(constraintName)) {
+        tableForeignKeys.set(constraintName, {
+          columns: [],
+          referencedTable: refTableKey,
+          referencedColumns: [],
+          onDelete: fk.delete_rule,
+          onUpdate: fk.update_rule,
+        });
+      }
+
+      const fkInfo = tableForeignKeys.get(constraintName)!;
+      fkInfo.columns.push(fk.column_name.toLowerCase());
+      fkInfo.referencedColumns.push(fk.referenced_column.toLowerCase());
+    }
+
+    // 生成全局关系视图
+    for (const [tableKey, tableForeignKeys] of foreignKeysByTable.entries()) {
+      for (const [constraintName, fkInfo] of tableForeignKeys.entries()) {
+        relationships.push({
+          fromTable: tableKey.toLowerCase(),
+          fromColumns: fkInfo.columns,
+          toTable: fkInfo.referencedTable.toLowerCase(),
+          toColumns: fkInfo.referencedColumns,
+          type: 'many-to-one',
+          constraintName,
+        });
+      }
     }
 
     const tableInfos: TableInfo[] = [];
 
-    for (const [tableName, columns] of columnsByTable.entries()) {
-      const tableIndexes = indexesByTable.get(tableName);
+    for (const [tableKey, columns] of columnsByTable.entries()) {
+      const tableIndexes = indexesByTable.get(tableKey);
       const indexInfos: IndexInfo[] = [];
 
       if (tableIndexes) {
@@ -346,12 +448,32 @@ export class SQLServerAdapter implements DbAdapter {
         }
       }
 
+      // 组装外键信息
+      const tableForeignKeys = foreignKeysByTable.get(tableKey);
+      const foreignKeyInfos: ForeignKeyInfo[] = [];
+
+      if (tableForeignKeys) {
+        for (const [constraintName, fkData] of tableForeignKeys.entries()) {
+          foreignKeyInfos.push({
+            name: constraintName,
+            columns: fkData.columns,
+            referencedTable: fkData.referencedTable.toLowerCase(),
+            referencedColumns: fkData.referencedColumns,
+            onDelete: fkData.onDelete,
+            onUpdate: fkData.onUpdate,
+          });
+        }
+      }
+
       tableInfos.push({
-        name: tableName.toLowerCase(),
+        name: tableKey.toLowerCase(),
+        schema: schemaByTable.get(tableKey),
+        comment: commentsByTable.get(tableKey) || undefined,
         columns,
-        primaryKeys: primaryKeysByTable.get(tableName) || [],
+        primaryKeys: primaryKeysByTable.get(tableKey) || [],
         indexes: indexInfos,
-        estimatedRows: rowsByTable.get(tableName) || 0,
+        foreignKeys: foreignKeyInfos.length > 0 ? foreignKeyInfos : undefined,
+        estimatedRows: rowsByTable.get(tableKey) || 0,
       });
     }
 
@@ -362,6 +484,7 @@ export class SQLServerAdapter implements DbAdapter {
       databaseName,
       tables: tableInfos,
       version,
+      relationships: relationships.length > 0 ? relationships : undefined,
     };
   }
 
