@@ -42,6 +42,44 @@
       "description": "MongoDB 日志库"
     },
     {
+      "name": "mongodb-cluster",
+      "type": "mongodb",
+      "uri": "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@mongo1.example.com:27017,mongo2.example.com:27017/mydb?replicaSet=rs0&authSource=admin",
+      "database": "mydb",
+      "description": "MongoDB 集群 (Replica Set, uri 优先于 host/port)"
+    },
+    {
+      "name": "mysql-via-ssh",
+      "type": "mysql",
+      "host": "10.0.0.1",
+      "port": 3306,
+      "user": "${DB_MYSQL_USER}",
+      "password": "${DB_MYSQL_PASSWORD}",
+      "database": "production",
+      "description": "MySQL (SSH 隧道)",
+      "ssh": {
+        "enabled": true,
+        "host": "bastion.example.com",
+        "port": 22,
+        "username": "deploy",
+        "privateKey": "~/.ssh/id_rsa"
+      }
+    },
+    {
+      "name": "mongodb-cluster-via-ssh",
+      "type": "mongodb",
+      "uri": "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@172.16.0.1:27017,172.16.0.2:27017/mydb?replicaSet=rs0&authSource=admin",
+      "database": "mydb",
+      "description": "MongoDB 集群 (SSH 隧道, uri 中所有节点地址会被替换为本地隧道入口)",
+      "ssh": {
+        "enabled": true,
+        "host": "bastion.example.com",
+        "port": 22,
+        "username": "deploy",
+        "privateKey": "~/.ssh/id_rsa"
+      }
+    },
+    {
       "name": "sqlite-local",
       "type": "sqlite",
       "filePath": "./data/local.db",

@@ -101,20 +101,40 @@ export class ConnectionPoolService {
         // 如果启用了 SSH 隧道，先建立隧道
         if (connection.ssh && connection.ssh.enabled) {
             try {
+                // MongoDB URI 模式：从 URI 中提取第一个 host:port 用于建立隧道
+                let remoteHost = connection.host || 'localhost';
+                let remotePort = connection.port || 3306;
+
+                if (connection.type === 'mongodb' && connection.uri) {
+                    const extracted = this.extractFirstHostFromUri(connection.uri);
+                    if (extracted) {
+                        remoteHost = extracted.host;
+                        remotePort = extracted.port;
+                    }
+                }
+
                 console.error(`🔒 正在建立 SSH 隧道: ${connectionName} -> ${connection.ssh.host}`);
                 const localPort = await sshTunnelService.createTunnel(
                     connectionName,
                     connection.ssh,
-                    connection.host || 'localhost',
-                    connection.port || 3306 // 使用默认端口作为后备
+                    remoteHost,
+                    remotePort
                 );
 
-                // 创建一个使用本地端口的配置副本
                 adapterConfig = {
                     ...connection,
                     host: '127.0.0.1',
                     port: localPort,
                 };
+
+                // 如果有 MongoDB URI，替换所有节点地址为本地隧道地址
+                if (connection.type === 'mongodb' && connection.uri) {
+                    adapterConfig = {
+                        ...adapterConfig,
+                        uri: this.rewriteMongoUri(connection.uri, localPort),
+                    };
+                }
+
                 console.error(`✅ SSH 隧道已建立，本地端口: ${localPort}`);
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
@@ -206,6 +226,7 @@ export class ConnectionPoolService {
                     password: connection.password,
                     database: connection.database,
                     authSource: connection.authSource,
+                    uri: connection.uri,
                 });
 
             case 'sqlite':
@@ -472,6 +493,57 @@ export class ConnectionPoolService {
             name,
             connected: true,
         }));
+    }
+
+    /**
+     * 从 MongoDB URI 中提取第一个 host:port（用于 SSH 隧道建立）
+     */
+    private extractFirstHostFromUri(uri: string): { host: string; port: number } | null {
+        try {
+            // mongodb://user:pass@host1:port1,host2:port2/db?params
+            const match = uri.match(/mongodb(?:\+srv)?:\/\/(?:[^@]+@)?([^/?]+)/);
+            if (!match) return null;
+
+            const hostsPart = match[1];
+            const firstHost = hostsPart.split(',')[0];
+            const [host, portStr] = firstHost.split(':');
+            return { host, port: portStr ? parseInt(portStr, 10) : 27017 };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * 将 MongoDB URI 中的所有 host:port 替换为本地隧道地址
+     * 集群模式下多节点会被合并为单个本地隧道入口
+     *
+     * SSH 隧道场景下必须：
+     * 1. 去掉 replicaSet 参数（隧道后驱动无法访问拓扑中的其他节点）
+     * 2. 添加 directConnection=true（强制直连单节点，不做拓扑发现）
+     */
+    private rewriteMongoUri(uri: string, localPort: number): string {
+        let rewritten = uri.replace(
+            /(mongodb(?:\+srv)?:\/\/(?:[^@]+@)?)([^/?]+)(.*)/,
+            `$1127.0.0.1:${localPort}$3`
+        );
+
+        // 去掉 replicaSet 参数
+        // 先处理 &replicaSet=xxx（非首个参数）
+        rewritten = rewritten.replace(/&replicaSet=[^&]*/g, '');
+        // 再处理 ?replicaSet=xxx&（首个参数且后面还有其他参数）
+        rewritten = rewritten.replace(/\?replicaSet=[^&]*&/, '?');
+        // 再处理 ?replicaSet=xxx（首个且唯一参数）
+        rewritten = rewritten.replace(/\?replicaSet=[^&]*$/, '');
+
+
+        // 添加 directConnection=true
+        if (rewritten.includes('?')) {
+            rewritten += '&directConnection=true';
+        } else {
+            rewritten += '?directConnection=true';
+        }
+
+        return rewritten;
     }
 }
 

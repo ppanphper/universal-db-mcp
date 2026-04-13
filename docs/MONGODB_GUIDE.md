@@ -134,28 +134,72 @@ MongoDB Atlas 是 MongoDB 的云服务：
 - 确保 IP 地址已添加到 Atlas 白名单
 - 使用数据库用户凭据，不是 Atlas 账号密码
 
-### 连接副本集
+### 连接副本集 / 集群 (Replica Set)
+
+推荐使用多库配置模式（`databases.yaml` + `--config`），通过 `uri` 字段传入完整的 MongoDB 连接字符串：
+
+**1. 创建 `databases.yaml` 配置文件：**
+
+```yaml
+databases:
+  - name: mongodb-replica
+    type: mongodb
+    uri: "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@node1.example.com:27017,node2.example.com:27017/mydb?replicaSet=rs0&authSource=admin"
+    database: mydb
+    description: MongoDB 副本集
+```
+
+**2. MCP 客户端配置（Claude Desktop / Cursor 等）：**
 
 ```json
 {
   "mcpServers": {
-    "mongodb-replica": {
+    "universal-db": {
       "command": "npx",
       "args": [
         "universal-db-mcp-plus",
-        "--type", "mongodb",
-        "--host", "replica-primary.example.com",
-        "--port", "27017",
-        "--user", "replicauser",
-        "--password", "replicapassword",
-        "--database", "myapp"
-      ]
+        "--config", "/absolute/path/to/databases.yaml"
+      ],
+      "env": {
+        "DB_MONGO_USER": "replicauser",
+        "DB_MONGO_PASSWORD": "replicapassword"
+      }
     }
   }
 }
 ```
 
-**注意**: 当前版本连接到主节点，副本集自动故障转移功能将在未来版本支持。
+> **重要**：`--config` 必须使用**绝对路径**。MCP 客户端启动进程的工作目录不固定，相对路径会找不到文件。
+
+`uri` 字段优先于 `host`/`port`，支持所有 MongoDB 连接字符串参数（多节点、replicaSet、readPreference 等）。
+
+### 连接副本集 + SSH 隧道
+
+适用于本地通过跳板机访问线上内网 MongoDB 集群：
+
+```yaml
+databases:
+  - name: mongodb-prod
+    type: mongodb
+    uri: "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@172.16.10.32:27017,172.16.10.24:27017/mydb?replicaSet=cmgo-xxx&authSource=admin"
+    database: mydb
+    description: 生产 MongoDB (SSH 隧道)
+    ssh:
+      enabled: true
+      host: bastion.example.com   # 跳板机公网地址
+      port: 22                     # SSH 端口
+      username: deploy             # SSH 用户名
+      privateKey: ~/.ssh/id_rsa    # SSH 私钥路径（支持 ~ 展开）
+      # password: "ssh_password"   # 或者使用密码认证（二选一）
+```
+
+**工作原理**：
+1. 程序从 URI 中提取第一个节点地址（`172.16.10.32:27017`）
+2. 通过跳板机建立 SSH 隧道到该地址，映射到本地随机端口
+3. 将 URI 中所有节点地址替换为 `127.0.0.1:localPort`
+4. MongoDB 驱动连接到本地隧道入口，对应用层完全透明
+
+> **注意**：SSH 隧道只映射到 URI 中第一个节点，适用于通过单一入口访问副本集的场景。
 
 ---
 
@@ -643,11 +687,11 @@ db.users.find({})
 
 ### Q: 支持 MongoDB 连接字符串吗？
 
-A: 当前版本使用独立参数配置。完整连接字符串支持将在未来版本添加。
+A: 支持。在多库配置模式下，使用 `uri` 字段可以传入完整的 MongoDB 连接字符串，支持多节点、replicaSet、authSource 等所有参数。详见上方 [连接副本集](#连接副本集--集群-replica-set) 章节。
 
 ### Q: 支持副本集和分片集群吗？
 
-A: 支持连接到副本集的主节点。完整的副本集和分片集群支持将在未来版本添加。
+A: 支持。通过 `uri` 字段传入包含多节点和 `replicaSet` 参数的连接字符串即可。同时支持配合 SSH 隧道使用。
 
 ### Q: 如何查看集合的结构？
 

@@ -563,6 +563,62 @@ npm install -g dmdb
 }
 ```
 
+### 多库配置模式 — MongoDB 集群 (Replica Set)
+
+使用 `databases.yaml` 配置文件，通过 `uri` 字段支持完整的 MongoDB 连接字符串：
+
+```yaml
+# databases.yaml
+databases:
+  - name: mongodb-cluster
+    type: mongodb
+    uri: "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@node1:27017,node2:27017/mydb?replicaSet=rs0&authSource=admin"
+    database: mydb
+    description: MongoDB 集群
+```
+
+MCP 客户端配置：
+
+```json
+{
+  "mcpServers": {
+    "universal-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp-plus",
+        "--config", "/absolute/path/to/databases.yaml"
+      ],
+      "env": {
+        "DB_MONGO_USER": "myuser",
+        "DB_MONGO_PASSWORD": "mypassword"
+      }
+    }
+  }
+}
+```
+
+### 多库配置模式 — MongoDB 集群 + SSH 隧道
+
+适用于本地通过跳板机访问线上内网 MongoDB 集群：
+
+```yaml
+# databases.yaml
+databases:
+  - name: mongodb-prod
+    type: mongodb
+    uri: "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@172.16.10.32:27017,172.16.10.24:27017/mydb?replicaSet=cmgo-xxx&authSource=admin"
+    database: mydb
+    description: 生产 MongoDB 集群 (SSH 隧道)
+    ssh:
+      enabled: true
+      host: bastion.example.com
+      port: 22
+      username: deploy
+      privateKey: ~/.ssh/id_rsa
+```
+
+> **工作原理**：SSH 隧道建立后，程序会自动将 URI 中所有节点地址（`172.16.10.32:27017,172.16.10.24:27017`）替换为本地隧道入口 `127.0.0.1:localPort`，对应用层透明。
+
 ### 查询格式
 
 MongoDB 适配器支持两种查询格式：

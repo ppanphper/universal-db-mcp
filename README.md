@@ -186,24 +186,56 @@ npx universal-db-mcp-plus-plus
 npx universal-db-mcp-plus-plus --config ./my-configs/db.yaml
 ```
 
-#### 3. Claude Desktop 配置
+#### 3. MCP 客户端配置
+
+> **重要**：MCP 客户端（Claude Desktop、Cursor 等）会自动启动 MCP Server 进程，你不需要手动启动。
+> 只需在客户端配置文件中声明好命令和参数即可。
+>
+> `--config` 参数**必须使用绝对路径**，因为客户端启动进程的工作目录不确定。
+
+**Claude Desktop** — 编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）：
+
 ```json
 {
   "mcpServers": {
     "universal-db": {
       "command": "npx",
       "args": [
-        "universal-db-mcp-plus-plus",
+        "universal-db-mcp-plus",
         "--config", "/absolute/path/to/databases.yaml"
       ],
       "env": {
-        "DB_PASSWORD": "your_secure_password",
-        "PG_PASSWORD": "another_password"
+        "DB_MYSQL_PASSWORD": "your_mysql_password",
+        "DB_MONGODB_USER": "mongo_user",
+        "DB_MONGODB_PASSWORD": "mongo_password"
       }
     }
   }
 }
 ```
+
+**Cursor** — 编辑 `.cursor/mcp.json`（项目级）或 `~/.cursor/mcp.json`（全局）：
+
+```json
+{
+  "mcpServers": {
+    "universal-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp-plus",
+        "--config", "/absolute/path/to/databases.yaml"
+      ],
+      "env": {
+        "DB_MYSQL_PASSWORD": "your_mysql_password",
+        "DB_MONGODB_USER": "mongo_user",
+        "DB_MONGODB_PASSWORD": "mongo_password"
+      }
+    }
+  }
+}
+```
+
+> **提示**：`databases.yaml` 中使用 `${DB_MYSQL_PASSWORD}` 引用环境变量，在客户端 `env` 中赋值，密码不会出现在配置文件里。
 
 ---
 
@@ -267,16 +299,43 @@ npx universal-db-mcp-plus-plus --type sqlite --file ./data.db
 ```
 
 #### MongoDB
+
+**单机模式**（host/port 配置）：
 ```yaml
 - name: my-mongo
   type: mongodb
   host: localhost
   port: 27017
   user: admin
-  password: "password"
+  password: "${DB_MONGO_PASSWORD}"
   database: test
-  authSource: admin # 可选
+  authSource: admin # 可选，默认为 admin
 ```
+
+**集群 / Replica Set 模式**（使用完整连接字符串）：
+```yaml
+# uri 字段优先于 host/port，支持多节点、replicaSet、authSource 等所有参数
+- name: my-mongo-cluster
+  type: mongodb
+  uri: "mongodb://user:password@node1:27017,node2:27017/mydb?replicaSet=rs0&authSource=admin"
+  database: mydb
+```
+
+**MongoDB + SSH 隧道**（本地通过跳板机访问线上内网集群）：
+```yaml
+- name: my-mongo-via-ssh
+  type: mongodb
+  uri: "mongodb://user:password@172.16.0.1:27017,172.16.0.2:27017/mydb?replicaSet=rs0&authSource=admin"
+  database: mydb
+  ssh:
+    enabled: true
+    host: bastion.example.com  # 跳板机地址
+    port: 22
+    username: deploy
+    privateKey: ~/.ssh/id_rsa
+```
+
+> **说明**：当同时使用 `uri` + `ssh` 时，程序会从 URI 中提取第一个节点地址建立 SSH 隧道，并将 URI 中所有节点地址替换为本地隧道入口 `127.0.0.1:localPort`，对 MongoDB 驱动透明。
 
 ### 3. 其他数据库
 

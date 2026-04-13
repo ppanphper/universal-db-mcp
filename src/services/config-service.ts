@@ -31,6 +31,8 @@ export interface DatabaseConnection {
   filePath?: string;
   /** MongoDB 认证数据库 */
   authSource?: string;
+  /** MongoDB 连接字符串（支持集群/Replica Set，优先于 host/port 拼接） */
+  uri?: string;
   /** 连接描述 */
   description?: string;
   /** 是否为默认连接 */
@@ -292,6 +294,11 @@ export class ConfigService {
     // 解析数据库名称中的环境变量
     if (resolved.database) {
       resolved.database = this.resolveEnvString(resolved.database);
+    }
+
+    // 解析 URI 中的环境变量（MongoDB 连接字符串等）
+    if (resolved.uri) {
+      resolved.uri = this.resolveEnvString(resolved.uri);
     }
 
     // 解析 SSH 配置中的环境变量

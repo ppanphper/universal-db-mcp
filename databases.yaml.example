@@ -1,5 +1,56 @@
 # 数据库配置示例 (YAML 格式)
 # 使用 YAML 可以添加注释，比 JSON 更易读
+#
+# ==================== 配置字段参考 ====================
+#
+# 每个数据库连接支持以下字段：
+#   name         (必填) 连接名称，唯一标识
+#   type         (必填) 数据库类型: mysql|postgres|redis|oracle|dm|sqlserver|mongodb|sqlite|
+#                       kingbase|gaussdb|oceanbase|tidb|clickhouse|polardb|goldendb|highgo|vastbase
+#   host                数据库主机地址
+#   port                数据库端口
+#   user                用户名
+#   password            密码（支持 ${ENV_VAR} 引用环境变量）
+#   database            数据库名称
+#   filePath            SQLite 数据库文件路径
+#   authSource          MongoDB 认证数据库（默认 admin）
+#   uri                 MongoDB 完整连接字符串（优先于 host/port，支持集群/Replica Set）
+#   description         连接描述（可选）
+#   isDefault           是否为默认连接（可选，默认取第一个）
+#   ssh                 SSH 隧道配置（可选），包含以下子字段：
+#     enabled           是否启用（true/false）
+#     host              跳板机地址
+#     port              SSH 端口（默认 22）
+#     username          SSH 用户名
+#     privateKey        SSH 私钥路径（支持 ~ 展开）
+#     password          SSH 密码（与 privateKey 二选一）
+#     passphrase        私钥密码（可选）
+#
+# 密码等敏感信息建议使用 ${ENV_VAR} 格式引用环境变量，
+# 然后在 MCP 客户端配置的 env 中赋值。
+#
+# ==================== MCP 客户端配置示例 ====================
+#
+# Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json):
+# Cursor (.cursor/mcp.json):
+#
+#   {
+#     "mcpServers": {
+#       "universal-db": {
+#         "command": "npx",
+#         "args": ["universal-db-mcp-plus", "--config", "/absolute/path/to/databases.yaml"],
+#         "env": {
+#           "DB_MYSQL_PASSWORD": "your_password",
+#           "DB_MONGO_USER": "your_user",
+#           "DB_MONGO_PASSWORD": "your_password"
+#         }
+#       }
+#     }
+#   }
+#
+# 注意：--config 参数必须使用绝对路径！
+#
+# ===========================================================
 
 databases:
   # MySQL 生产数据库
@@ -39,6 +90,39 @@ databases:
     password: "${DB_APP_PASSWORD}"
     database: myapp
     description: 通过 SSH 隧道连接
+    ssh:
+      enabled: true
+      host: bastion.example.com
+      port: 22
+      username: deploy
+      privateKey: ~/.ssh/id_rsa
+
+  # MongoDB 单机
+  - name: mongodb-logs
+    type: mongodb
+    host: localhost
+    port: 27017
+    user: admin
+    password: "${DB_MONGO_PASSWORD}"
+    database: logs
+    authSource: admin
+    description: MongoDB 日志库
+
+  # MongoDB 集群 (Replica Set) - 使用完整连接字符串
+  # uri 字段优先于 host/port，支持多节点、replicaSet 等所有 MongoDB 连接参数
+  - name: mongodb-cluster
+    type: mongodb
+    uri: "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@mongo1.example.com:27017,mongo2.example.com:27017/mydb?replicaSet=rs0&authSource=admin"
+    database: mydb
+    description: MongoDB 集群
+
+  # MongoDB 集群 + SSH 隧道
+  # SSH 隧道会将 URI 中第一个节点的 host:port 映射到本地，其余节点地址也会被替换
+  - name: mongodb-cluster-via-ssh
+    type: mongodb
+    uri: "mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@172.16.10.32:27017,172.16.10.24:27017/mydb?replicaSet=rs0&authSource=admin"
+    database: mydb
+    description: MongoDB 集群 (SSH 隧道)
     ssh:
       enabled: true
       host: bastion.example.com

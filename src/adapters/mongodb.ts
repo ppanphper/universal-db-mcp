@@ -25,6 +25,7 @@ export class MongoDBAdapter implements DbAdapter {
     password?: string;
     database?: string;
     authSource?: string;
+    uri?: string;
   };
 
   constructor(config: {
@@ -34,6 +35,7 @@ export class MongoDBAdapter implements DbAdapter {
     password?: string;
     database?: string;
     authSource?: string;
+    uri?: string;
   }) {
     this.config = config;
   }
@@ -43,23 +45,29 @@ export class MongoDBAdapter implements DbAdapter {
    */
   async connect(): Promise<void> {
     try {
-      // 构建连接字符串
-      let uri = 'mongodb://';
+      let uri: string;
 
-      if (this.config.user && this.config.password) {
-        uri += `${encodeURIComponent(this.config.user)}:${encodeURIComponent(this.config.password)}@`;
-      }
+      if (this.config.uri) {
+        // 优先使用完整连接字符串（支持集群/Replica Set 等复杂场景）
+        uri = this.config.uri;
+      } else {
+        // 从 host/port 等字段拼接
+        uri = 'mongodb://';
 
-      uri += `${this.config.host}:${this.config.port}`;
+        if (this.config.user && this.config.password) {
+          uri += `${encodeURIComponent(this.config.user)}:${encodeURIComponent(this.config.password)}@`;
+        }
 
-      if (this.config.database) {
-        uri += `/${this.config.database}`;
-      }
+        uri += `${this.config.host}:${this.config.port}`;
 
-      // 添加认证源参数
-      const authSource = this.config.authSource || this.config.database || 'admin';
-      if (this.config.user) {
-        uri += `?authSource=${authSource}`;
+        if (this.config.database) {
+          uri += `/${this.config.database}`;
+        }
+
+        const authSource = this.config.authSource || this.config.database || 'admin';
+        if (this.config.user) {
+          uri += `?authSource=${authSource}`;
+        }
       }
 
       this.client = new MongoClient(uri, {
@@ -69,16 +77,28 @@ export class MongoDBAdapter implements DbAdapter {
 
       await this.client.connect();
 
-      // 选择数据库
-      const dbName = this.config.database || 'test';
+      // 从 URI 中解析 database，或使用 config.database 作为回退
+      const dbName = this.config.database || this.extractDbNameFromUri(uri) || 'test';
       this.db = this.client.db(dbName);
 
-      // 测试连接 - 使用 command 方法代替 admin().ping()
       await this.db.command({ ping: 1 });
     } catch (error) {
       throw new Error(
         `MongoDB 连接失败: ${error instanceof Error ? error.message : String(error)}`
       );
+    }
+  }
+
+  /**
+   * 从 MongoDB URI 中提取数据库名称
+   */
+  private extractDbNameFromUri(uri: string): string | undefined {
+    try {
+      // mongodb://user:pass@host1:port1,host2:port2/dbname?params
+      const match = uri.match(/mongodb(?:\+srv)?:\/\/[^/]*\/([^?]+)/);
+      return match?.[1];
+    } catch {
+      return undefined;
     }
   }
 
