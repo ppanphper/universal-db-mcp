@@ -171,34 +171,114 @@ export class MongoDBAdapter implements DbAdapter {
     // 尝试解析 JSON 格式
     if (trimmed.startsWith('{')) {
       try {
-        return JSON.parse(trimmed);
+        const parsed = JSON.parse(trimmed);
+
+        if (!parsed.collection) {
+          throw new Error('JSON 格式缺少 collection 字段');
+        }
+        if (!parsed.operation) {
+          throw new Error('JSON 格式缺少 operation 字段。请使用 "operation" 而非 "action"/"method" 等');
+        }
+
+        // 兼容 filter 作为 query 的别名
+        if (parsed.filter && !parsed.query) {
+          parsed.query = parsed.filter;
+          delete parsed.filter;
+        }
+
+        // 兼容 projection 直接放在顶层（而非 options 内）
+        if (parsed.projection && !parsed.options?.projection) {
+          parsed.options = { ...parsed.options, projection: parsed.projection };
+          delete parsed.projection;
+        }
+
+        return parsed;
       } catch (error) {
-        throw new Error('无效的 JSON 查询格式');
+        if (error instanceof SyntaxError) {
+          throw new Error('无效的 JSON 查询格式');
+        }
+        throw error;
       }
     }
 
-    // 解析 db.collection.operation() 格式
-    const match = trimmed.match(/db\.(\w+)\.(\w+)\((.*)\)/s);
+    // 解析 db.collection.operation(arg1, arg2) 格式，支持多个参数
+    const match = trimmed.match(/db\.(\w+)\.(\w+)\(([\s\S]*)\)/);
     if (match) {
       const [, collection, operation, argsStr] = match;
+      const trimmedArgs = argsStr.trim();
 
-      let args: Document = {};
-      if (argsStr.trim()) {
-        try {
-          args = JSON.parse(argsStr);
-        } catch (error) {
-          throw new Error('无效的查询参数格式');
-        }
+      if (!trimmedArgs) {
+        return { collection, operation };
       }
 
-      return {
-        collection,
-        operation,
-        query: args,
-      };
+      // 按顶层逗号分割多个参数（跳过嵌套的 {} 和 []）
+      const argParts = this.splitTopLevelArgs(trimmedArgs);
+
+      try {
+        const firstArg = argParts[0] ? JSON.parse(argParts[0]) : {};
+        const secondArg = argParts[1] ? JSON.parse(argParts[1]) : undefined;
+
+        // find/findOne: 第一个参数是 filter，第二个是 options（含 projection）
+        if (['find', 'findone', 'findOne'].includes(operation) && secondArg) {
+          return {
+            collection,
+            operation,
+            query: firstArg,
+            options: secondArg,
+          };
+        }
+
+        // updateOne/updateMany: 第一个参数是 filter，第二个是 update
+        if (['update', 'updateone', 'updateOne', 'updatemany', 'updateMany'].includes(operation) && secondArg) {
+          return {
+            collection,
+            operation,
+            query: firstArg,
+            update: secondArg,
+          };
+        }
+
+        return {
+          collection,
+          operation,
+          query: firstArg,
+        };
+      } catch (error) {
+        throw new Error(`无效的查询参数格式。Shell 格式的参数必须是合法 JSON。示例: db.users.find({"age": {"$gt": 18}}, {"projection": {"name": 1}})`);
+      }
     }
 
-    throw new Error('不支持的查询格式。请使用 JSON 格式或 db.collection.operation() 格式');
+    throw new Error(
+      '不支持的查询格式。请使用以下格式之一：\n' +
+      '1. JSON 格式: {"collection": "users", "operation": "find", "query": {"age": {"$gt": 18}}, "options": {"limit": 10}}\n' +
+      '2. Shell 格式: db.users.find({"age": {"$gt": 18}})'
+    );
+  }
+
+  /**
+   * 按顶层逗号分割参数字符串，正确处理嵌套的 {} 和 []
+   */
+  private splitTopLevelArgs(argsStr: string): string[] {
+    const parts: string[] = [];
+    let depth = 0;
+    let current = '';
+
+    for (const ch of argsStr) {
+      if (ch === '{' || ch === '[') depth++;
+      if (ch === '}' || ch === ']') depth--;
+      if (ch === ',' && depth === 0) {
+        parts.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+
+    if (current.trim()) {
+      parts.push(current.trim());
+    }
+
+    return parts;
   }
 
   /**
@@ -219,11 +299,21 @@ export class MongoDBAdapter implements DbAdapter {
     const collection = this.db.collection(parsed.collection);
     const operation = parsed.operation.toLowerCase();
 
+    const DEFAULT_LIMIT = 1000;
+
     switch (operation) {
       case 'find': {
-        const cursor = collection.find(parsed.query || {}, parsed.options);
+        const findOptions = { ...parsed.options };
+        if (!findOptions.limit) {
+          findOptions.limit = DEFAULT_LIMIT;
+        }
+        const cursor = collection.find(parsed.query || {}, findOptions);
         const results = await cursor.toArray();
-        return results.map(doc => this.formatDocument(doc));
+        const rows = results.map(doc => this.formatDocument(doc));
+        if (!parsed.options?.limit && results.length >= DEFAULT_LIMIT) {
+          rows.push({ _warning: `结果已被截断为 ${DEFAULT_LIMIT} 条。如需更多数据请显式指定 options.limit，或使用 aggregate + $limit。` });
+        }
+        return rows;
       }
 
       case 'findone': {
@@ -249,9 +339,18 @@ export class MongoDBAdapter implements DbAdapter {
         if (!parsed.pipeline) {
           throw new Error('aggregate 操作需要指定 pipeline 参数');
         }
-        const cursor = collection.aggregate(parsed.pipeline);
+        const pipeline = [...parsed.pipeline];
+        const hasLimit = pipeline.some(stage => '$limit' in stage);
+        if (!hasLimit) {
+          pipeline.push({ $limit: DEFAULT_LIMIT });
+        }
+        const cursor = collection.aggregate(pipeline);
         const results = await cursor.toArray();
-        return results.map(doc => this.formatDocument(doc));
+        const rows = results.map(doc => this.formatDocument(doc));
+        if (!hasLimit && results.length >= DEFAULT_LIMIT) {
+          rows.push({ _warning: `结果已被截断为 ${DEFAULT_LIMIT} 条。如需更多数据请在 pipeline 中显式添加 $limit 阶段。` });
+        }
+        return rows;
       }
 
       case 'insert':
