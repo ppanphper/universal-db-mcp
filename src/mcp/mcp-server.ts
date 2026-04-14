@@ -15,6 +15,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
+import { getExecuteQueryTool, getGetSchemaTool, getGetTableInfoTool } from '../utils/tool-descriptions.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -50,60 +51,13 @@ export class DatabaseMCPServer {
   private setupHandlers(): void {
     // 列出可用工具
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      const dbType = this.config?.type;
+
       return {
         tools: [
-          {
-            name: 'execute_query',
-            description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: '要执行的 SQL 语句或数据库命令',
-                },
-                params: {
-                  type: 'array',
-                  description: '查询参数（可选，用于参数化查询防止 SQL 注入）',
-                  items: {
-                    type: 'string',
-                  },
-                },
-              },
-              required: ['query'],
-            },
-          },
-          {
-            name: 'get_schema',
-            description: '获取数据库结构信息，包括所有 Schema 中用户可访问的表名、列名、数据类型、主键、索引等元数据。在执行查询前调用此工具可以帮助理解数据库结构。结果会被缓存以提高性能。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                forceRefresh: {
-                  type: 'boolean',
-                  description: '是否强制刷新缓存（可选，默认 false）。设为 true 可获取最新的数据库结构。',
-                },
-              },
-            },
-          },
-          {
-            name: 'get_table_info',
-            description: '获取指定表的详细信息，包括列定义、索引、预估行数等。用于深入了解某个表的结构。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                tableName: {
-                  type: 'string',
-                  description: '表名。支持 schema.table_name 格式指定 Schema（如 analytics.users）。不指定 Schema 时查询默认 Schema。',
-                },
-                forceRefresh: {
-                  type: 'boolean',
-                  description: '是否强制刷新缓存（可选，默认 false）',
-                },
-              },
-              required: ['tableName'],
-            },
-          },
+          getExecuteQueryTool(dbType),
+          getGetSchemaTool(dbType),
+          getGetTableInfoTool(dbType),
           {
             name: 'clear_cache',
             description: '清除 Schema 缓存。当数据库结构发生变化（如新增表、修改列）时，可以调用此工具清除缓存。',
@@ -227,6 +181,8 @@ export class DatabaseMCPServer {
               filePath, allowWrite, permissionMode, authSource, oracleClientPath,
             } = args as Record<string, any>;
 
+            const previousType = this.config?.type;
+
             // 构建新配置
             const newConfig: DbConfig = {
               type: normalizeDbType(type),
@@ -275,6 +231,10 @@ export class DatabaseMCPServer {
               : `${newConfig.type}: ${newConfig.host}:${newConfig.port}/${newConfig.database || '(default)'}`;
 
             console.error(`✅ 数据库连接成功: ${connInfo}`);
+
+            if (previousType !== newConfig.type) {
+              await this.server.sendToolListChanged();
+            }
 
             return {
               content: [{

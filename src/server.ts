@@ -17,6 +17,7 @@ import {
 import type { DbAdapter, DbConfig } from './types/adapter.js';
 import { validateQuery } from './utils/safety.js';
 import { configService, connectionPool, sshTunnelService } from './services/index.js';
+import { getExecuteQueryTool, getGetSchemaTool, getGetTableInfoTool, detectQueryTypeMismatch, type MultiDbContext } from './utils/tool-descriptions.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -71,55 +72,21 @@ export class DatabaseMCPServer {
   private setupHandlers(): void {
     // 列出可用工具
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      const currentDbType = this.useMultiDatabase
+        ? configService.getCurrentConnection()?.type
+        : this.config.type;
+
+      let multiDbCtx: MultiDbContext | undefined;
+      if (this.useMultiDatabase) {
+        const conn = configService.getCurrentConnection();
+        multiDbCtx = { currentDbName: conn.name, currentDbType: conn.type };
+      }
+
       const tools = [
         // ========== 查询工具 ==========
-        {
-          name: 'execute_query',
-          description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: '要执行的 SQL 语句或数据库命令',
-              },
-              params: {
-                type: 'array',
-                description: '查询参数（可选，用于参数化查询防止 SQL 注入）',
-                items: { type: 'string' },
-              },
-            },
-            required: ['query'],
-          },
-        },
-        {
-          name: 'get_schema',
-          description: '获取数据库结构信息。建议在数据库表较多（超过 50 张）时使用 tableNames 参数进行过滤，以避免超时。',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              tableNames: {
-                type: 'array',
-                description: '可选，指定要获取的表名列表（只获取这些表的元数据）。强烈建议在大规模数据库中使用。',
-                items: { type: 'string' },
-              },
-            },
-          },
-        },
-        {
-          name: 'get_table_info',
-          description: '获取指定表的详细信息，包括列定义、索引、预估行数等。用于深入了解某个表的结构。',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              tableName: {
-                type: 'string',
-                description: '表名',
-              },
-            },
-            required: ['tableName'],
-          },
-        },
+        getExecuteQueryTool(currentDbType, multiDbCtx),
+        getGetSchemaTool(currentDbType, { tableNamesFilter: true }),
+        getGetTableInfoTool(currentDbType),
         // ========== 连接管理工具 ==========
         {
           name: 'list_databases',
@@ -131,13 +98,13 @@ export class DatabaseMCPServer {
         },
         {
           name: 'switch_database',
-          description: '切换到指定的数据库连接。需要提供连接名称。',
+          description: '切换到指定的数据库连接。切换后所有查询将发送到新的数据库。调用示例：switch_database({"name": "mongodb-prod"})',
           inputSchema: {
             type: 'object',
             properties: {
               name: {
                 type: 'string',
-                description: '要切换到的数据库连接名称',
+                description: '要切换到的数据库连接名称（即 list_databases 返回的 name 字段）',
               },
             },
             required: ['name'],
@@ -288,6 +255,23 @@ export class DatabaseMCPServer {
           // ========== 查询工具 ==========
           case 'execute_query': {
             const { query, params } = args as { query: string; params?: unknown[] };
+
+            if (this.useMultiDatabase) {
+              const currentConn = configService.getCurrentConnection();
+              const mismatch = detectQueryTypeMismatch(query, currentConn.type);
+              if (mismatch) {
+                const available = configService.listDatabases()
+                  .filter(d => mismatch.matchDbTypes.includes(d.type))
+                  .map(d => d.name);
+                const switchHint = available.length > 0
+                  ? `请先调用 switch_database({"name": "${available[0]}"}) 切换到 ${mismatch.queryCategory} 数据库，然后重新执行查询。可选数据库: ${available.join(', ')}。`
+                  : `当前配置中没有 ${mismatch.queryCategory} 类型的数据库。`;
+                throw new Error(
+                  `查询格式与当前数据库不匹配：当前活跃数据库是 "${currentConn.name}" (${currentConn.type})，但收到的是 ${mismatch.queryCategory} 格式的查询。${switchHint}`
+                );
+              }
+            }
+
             const adapter = await this.getCurrentAdapter();
             const allowWrite = this.useMultiDatabase
               ? configService.isAllowWrite()
@@ -380,6 +364,7 @@ export class DatabaseMCPServer {
             }
 
             const databases = configService.listDatabases();
+            const currentName = configService.getCurrentDatabaseName();
             return {
               content: [
                 {
@@ -387,6 +372,8 @@ export class DatabaseMCPServer {
                   text: JSON.stringify({
                     mode: 'multi-database',
                     total: databases.length,
+                    currentDatabase: currentName,
+                    hint: `当前所有查询都将发送到 "${currentName}"。如需操作其他数据库，请先调用 switch_database 切换。`,
                     databases,
                   }, null, 2),
                 },
@@ -402,11 +389,17 @@ export class DatabaseMCPServer {
             }
 
             const previousName = configService.getCurrentDatabaseName();
+            const previousType = configService.getCurrentConnection()?.type;
             const success = configService.switchDatabase(dbName);
 
             if (!success) {
               const available = configService.listDatabases().map(d => d.name).join(', ');
               throw new Error(`数据库连接 "${dbName}" 不存在。可用的连接: ${available}`);
+            }
+
+            const newConn = configService.getCurrentConnection();
+            if (previousType !== newConn.type) {
+              await this.server.sendToolListChanged();
             }
 
             return {
@@ -417,7 +410,8 @@ export class DatabaseMCPServer {
                     success: true,
                     previousDatabase: previousName,
                     currentDatabase: dbName,
-                    message: `已切换到数据库: ${dbName}`,
+                    currentType: newConn.type,
+                    message: `已切换到数据库: ${dbName} (${newConn.type})。后续所有查询将发送到此数据库。`,
                   }, null, 2),
                 },
               ],
@@ -444,6 +438,7 @@ export class DatabaseMCPServer {
             }
 
             const current = configService.getCurrentConnection();
+            const allDbs = configService.listDatabases();
             return {
               content: [
                 {
@@ -457,6 +452,8 @@ export class DatabaseMCPServer {
                     port: current.port,
                     database: current.database,
                     allowWrite: configService.isAllowWrite(),
+                    hint: `当前所有 execute_query / get_schema / get_table_info 操作都将发送到 "${current.name}" (${current.type})。`,
+                    availableDatabases: allDbs.map(d => `${d.name} (${d.type})`),
                   }, null, 2),
                 },
               ],
