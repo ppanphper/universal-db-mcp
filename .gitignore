@@ -9,4 +9,6 @@ coverage/
 .idea/
 .databases.yaml
 .databases.json
+databases.yaml
+databases.json
 .specstory

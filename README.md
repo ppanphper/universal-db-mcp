@@ -2,25 +2,26 @@
   <img src="assets/logo.png" alt="Universal DB MCP Logo" width="200">
 </p>
 
-<h1 align="center">Universal DB MCP</h1>
+<h1 align="center">Universal DB MCP Plus</h1>
 
 <p align="center">
-  <strong>Connect AI to Your Database with Natural Language</strong>
+  <strong>Connect AI to Your Database with Natural Language — Enhanced Fork</strong>
 </p>
 
 <p align="center">
-  A universal database connector implementing the Model Context Protocol (MCP) and HTTP API, enabling AI assistants to query and analyze your databases using natural language. Works with Claude Desktop, Cursor, Windsurf, VS Code, ChatGPT, and 50+ other platforms.
+  An enhanced fork of <a href="https://github.com/Anarkh-Lee/universal-db-mcp">Anarkh-Lee/universal-db-mcp</a>, adding multi-database configuration, SSH tunneling, connection pooling, and improved MongoDB support on top of the original universal database MCP connector.
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/universal-db-mcp"><img src="https://img.shields.io/npm/v/universal-db-mcp.svg?style=flat-square&color=blue" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/universal-db-mcp"><img src="https://img.shields.io/npm/dm/universal-db-mcp.svg?style=flat-square&color=green" alt="npm downloads"></a>
+  <a href="https://www.npmjs.com/package/universal-db-mcp-plus"><img src="https://img.shields.io/npm/v/universal-db-mcp-plus.svg?style=flat-square&color=blue" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/universal-db-mcp-plus"><img src="https://img.shields.io/npm/dm/universal-db-mcp-plus.svg?style=flat-square&color=green" alt="npm downloads"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square" alt="Node.js Version"></a>
-  <a href="https://github.com/Anarkh-Lee/universal-db-mcp/stargazers"><img src="https://img.shields.io/github/stars/Anarkh-Lee/universal-db-mcp?style=flat-square" alt="GitHub Stars"></a>
+  <a href="https://github.com/Anarkh-Lee/universal-db-mcp/stargazers"><img src="https://img.shields.io/github/stars/Anarkh-Lee/universal-db-mcp?style=flat-square" alt="Upstream Stars"></a>
 </p>
 
 <p align="center">
+  <a href="#-fork-origin--enhancements">Enhancements</a> •
   <a href="#-features">Features</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-supported-databases">Databases</a> •
@@ -31,6 +32,33 @@
 <p align="center">
   <a href="./README.md">English</a> | <a href="./README.zh-CN.md">中文文档</a>
 </p>
+
+---
+
+## 🔀 Fork Origin & Enhancements
+
+> This project is forked from [Anarkh-Lee/universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp) (upstream v2.14.0). We are grateful to the original author for building such an excellent universal database MCP connector. This fork is published on npm as [`universal-db-mcp-plus`](https://www.npmjs.com/package/universal-db-mcp-plus).
+
+### What's Different from Upstream
+
+| Category | Enhancement | Description |
+|----------|-------------|-------------|
+| **Multi-Database Config** | `databases.json` / `databases.yaml` | Configure and manage multiple database connections in a single file, with `${ENV_VAR}` support for secrets |
+| **SSH Tunneling** | SSH tunnel service | Access remote databases through SSH bastion hosts with automatic port forwarding |
+| **Connection Pooling** | Pool management service | Reusable adapter pool with health checks, auto-reconnection, and graceful shutdown |
+| **MongoDB Enhancements** | URI & Replica Set support | Full MongoDB connection string support, replica set through SSH tunnels, improved JSON query parsing with better error messages |
+| **Tool Descriptions** | Dynamic per-database-type | MCP tool descriptions are dynamically generated based on connected database type (SQL vs MongoDB vs Redis), giving AI better context |
+| **MySQL Optimization** | `BASE TABLE` filter | Restrict schema fetching to base tables only, avoiding views and system tables |
+| **MCP Verification** | `scripts/verify-mcp.js` | Automated MCP stdio protocol verification script |
+
+### New Files Added
+
+- `src/services/config-service.ts` — Multi-database configuration management
+- `src/services/connection-pool.ts` — Database adapter pool with health monitoring
+- `src/services/ssh-tunnel.ts` — SSH tunnel creation and lifecycle management
+- `src/utils/tool-descriptions.ts` — Dynamic MCP tool descriptions per database type
+- `databases.json.example` / `databases.yaml.example` — Example multi-database config files
+- `scripts/verify-mcp.js` — MCP protocol verification utility
 
 ---
 
@@ -76,7 +104,7 @@ AI: Let me query that for you...
 ### Installation
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 ```
 
 ### MCP Mode (Claude Desktop)
@@ -92,7 +120,7 @@ Add to your Claude Desktop configuration file:
     "my-database": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "localhost",
         "--port", "3306",
@@ -120,7 +148,7 @@ export HTTP_PORT=3000
 export API_KEYS=your-secret-key
 
 # Start the server
-npx universal-db-mcp
+npx universal-db-mcp-plus
 ```
 
 ```bash
@@ -273,16 +301,16 @@ Fine-grained permission control is supported for flexible configuration:
 
 ```bash
 # Read-only mode (default)
-npx universal-db-mcp --type mysql ...
+npx universal-db-mcp-plus --type mysql ...
 
 # Read/write but no delete
-npx universal-db-mcp --type mysql --permission-mode readwrite ...
+npx universal-db-mcp-plus --type mysql --permission-mode readwrite ...
 
 # Custom: only read and insert
-npx universal-db-mcp --type mysql --permissions read,insert ...
+npx universal-db-mcp-plus --type mysql --permissions read,insert ...
 
 # Full control (equivalent to --danger-allow-write)
-npx universal-db-mcp --type mysql --permission-mode full ...
+npx universal-db-mcp-plus --type mysql --permission-mode full ...
 ```
 
 **Permission Configuration by Transport:**
@@ -496,8 +524,8 @@ Universal DB MCP works with any platform that supports the MCP protocol or REST 
 Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.md) before submitting a Pull Request.
 
 ```bash
-# Clone the repository
-git clone https://github.com/Anarkh-Lee/universal-db-mcp.git
+# Clone this repository
+git clone https://github.com/ppanphper/universal-db-mcp.git
 
 # Install dependencies
 npm install
@@ -515,7 +543,7 @@ This project is licensed under the [MIT License](./LICENSE).
 
 ## 🌟 Star History
 
-If you find this project useful, please consider giving it a star! Your support helps us continue improving Universal DB MCP.
+If you find this project useful, please consider giving a star to both the [upstream repo](https://github.com/Anarkh-Lee/universal-db-mcp) and this enhanced fork!
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Anarkh-Lee/universal-db-mcp&type=Date)](https://star-history.com/#Anarkh-Lee/universal-db-mcp&Date)
 
@@ -523,8 +551,12 @@ If you find this project useful, please consider giving it a star! Your support 
 
 See [CHANGELOG.md](./CHANGELOG.md) for a detailed version history.
 
+## 🙏 Acknowledgements
+
+This project is based on [universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp) by [Anarkh-Lee](https://github.com/Anarkh-Lee). We deeply appreciate the original author's work in building this comprehensive universal database MCP connector.
+
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/Anarkh-Lee">Anarkh-Lee</a>
+  Original project by <a href="https://github.com/Anarkh-Lee">Anarkh-Lee</a> · Enhanced by <a href="https://github.com/ppanphper">ppanphper</a>
 </p>
