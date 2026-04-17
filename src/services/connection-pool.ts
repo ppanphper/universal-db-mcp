@@ -355,7 +355,11 @@ export class ConnectionPoolService {
 
         await Promise.all(closePromises);
         this.pools.clear();
-        console.error('👋 所有连接已关闭');
+
+        // 关闭所有关联的 SSH 隧道
+        await sshTunnelService.closeAll();
+
+        console.error('👋 所有连接及 SSH 隧道已关闭');
     }
 
     /**
@@ -448,8 +452,14 @@ export class ConnectionPoolService {
             try {
                 const startTime = Date.now();
 
-                // 强制重新创建连接
-                await this.closeConnection(connectionName);
+                // 只销毁数据库适配器，保留 SSH 隧道（隧道有自己的健康检查，
+                // createTunnel 会在隧道失效时自动重建）
+                const existingAdapter = this.pools.get(connectionName);
+                if (existingAdapter) {
+                    await existingAdapter.disconnect();
+                    this.pools.delete(connectionName);
+                }
+
                 const adapter = await this.getAdapter(connectionName);
                 await this.testConnection(adapter, db.type);
 
