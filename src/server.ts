@@ -33,7 +33,7 @@ export class DatabaseMCPServer {
     this.server = new Server(
       {
         name: 'universal-db-mcp',
-        version: '0.2.0',
+        version: '2.0.2',
       },
       {
         capabilities: {

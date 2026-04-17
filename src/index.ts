@@ -35,7 +35,7 @@ async function main() {
     program
       .name('universal-db-mcp')
       .description('MCP 数据库万能连接器 - 让 Claude Desktop 直接连接你的数据库')
-      .version('0.2.0')
+      .version('2.0.2')
       // ========== 多数据库配置模式 ==========
       .option('--config <path>', '多数据库配置文件路径（JSON 格式）')
       // ========== 单数据库模式参数 ==========
