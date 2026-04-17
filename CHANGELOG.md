@@ -1,6 +1,60 @@
 # 更新日志
 
-本文档记录 Universal DB MCP 的版本更新历史。
+本文档记录 Universal DB MCP Plus（`universal-db-mcp-plus`）的版本更新历史。
+
+> 本项目 fork 自 [Anarkh-Lee/universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp)（上游版本 2.14.0），在其基础上增加了多数据库配置、SSH 隧道、连接池等增强功能。上游的历史更新记录保留在本文件下方。
+
+---
+
+## [2.0.2] - 2026-04-17
+
+### 修复
+
+- **MCP 关闭后 Node 进程残留不退出** — 每次 MCP 客户端（Claude Desktop、Cursor 等）启动再关闭后，Node 进程不会退出，累积残留导致内存浪费
+  - `stop()` 增加 `server.close()` 调用，释放 `StdioServerTransport` 在 stdin/stdout 上的监听器，使 Node 事件循环可以正常退出
+  - 监听 stdin 的 `end`/`close` 事件，MCP 客户端断开管道时主动触发关闭流程
+  - shutdown 增加 5 秒超时保护，防止 `disconnect()` 卡死导致进程永远挂起
+  - shutdown 增加重入锁（`shuttingDown` 标志），防止 SIGINT/SIGTERM/stdin-close 并发触发重复关闭
+- **SSH 隧道资源泄露** — `closeAll()` 关闭数据库连接后遗漏关闭 SSH 隧道，导致隧道进程残留
+  - `ConnectionPoolService.closeAll()` 现在同步关闭所有关联的 SSH 隧道
+- **SSH 隧道"假活"复用** — 隧道复用时未验证底层连接是否存活，网络波动后盲目复用已死隧道导致数据库连接失败
+  - `createTunnel()` 复用前检查 SSH socket 可写状态和本地 server 监听状态，失效时自动清理并重建
+- **重试连接时不必要的隧道重建** — `testConnectionWithRetry()` 每次重试都销毁并重建 SSH 隧道，造成无谓的 SSH 握手开销
+  - 重试时仅销毁数据库适配器，保留 SSH 隧道（隧道有独立的健康检查机制）
+
+## [2.0.1] - 2026-04-16
+
+### 改进
+
+- **声明 fork 来源** — 在 `package.json` 和 README 中明确标注上游仓库来源
+- **MongoDB 查询增强** — 优化 MongoDB 查询解析和错误处理
+- **清理弃用配置** — 移除弃用的 `databases.yaml` 配置文件，更新 `.gitignore`
+- **工具描述优化** — 更新数据库连接详情和 MCP 工具描述信息
+
+## [2.0.0] - 2026-04-15
+
+### 新增（基于上游 2.14.0 的增强）
+
+- **多数据库配置模式** — 通过 `--config` 参数或自动检测 `databases.json`/`databases.yaml` 配置文件，一次配置多个数据库连接
+  - 支持 YAML 和 JSON 两种配置格式
+  - 支持 `${ENV_VAR}` 格式的环境变量引用（密码、用户名等敏感信息）
+  - 提供 `list_databases`、`switch_database`、`get_current_database` 等 MCP 工具
+  - 查询类型自动检测，SQL/MongoDB/Redis 格式不匹配时智能提示切换
+- **SSH 隧道支持** — 通过 SSH 跳板机安全连接内网数据库
+  - 支持密码、私钥文件、私钥内容三种认证方式
+  - 自动 `~` 路径展开和默认密钥检测
+  - 隧道按连接名复用，避免重复创建
+  - Keep-Alive 心跳保持隧道活跃
+  - MongoDB 集群 URI 自动改写（去 replicaSet + directConnection）
+  - 提供 `list_tunnels`、`get_tunnel_status` 等 MCP 工具
+- **连接池管理** — 数据库适配器按需创建、自动复用
+  - 并发创建保护（同一连接不会被并发创建多次）
+  - 健康检查（`health_check`）和带重试的连接测试（`testConnectionWithRetry`）
+  - 关闭连接时自动清理关联的 SSH 隧道
+
+---
+
+> 以下为上游 [universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp) 的历史更新记录
 
 ## [2.14.0] - 2026
 
