@@ -39,14 +39,18 @@ export class SSHTunnelService {
         remoteHost: string,
         remotePort: number
     ): Promise<number> {
-        // 检查是否已存在同名隧道，如果存在则复用
+        // 检查是否已存在同名隧道
         if (this.tunnels.has(name)) {
             const tunnel = this.tunnels.get(name)!;
-            // 检查隧道是否活跃，如果不活跃则关闭并重新创建
-            // 这里简单处理：如果已存在，假设它是好的，或者在调用方处理重试
-            //为了更健壮，我们可以在这里做简单的健康检查，或者让调用方决定是否强制重建
-            console.error(`🔒 复用现有的 SSH 隧道: ${name} (localhost:${tunnel.localPort} -> ${remoteHost}:${remotePort})`);
-            return tunnel.localPort;
+
+            if (this.isTunnelAlive(tunnel)) {
+                console.error(`🔒 复用现有的 SSH 隧道: ${name} (localhost:${tunnel.localPort} -> ${remoteHost}:${remotePort})`);
+                return tunnel.localPort;
+            }
+
+            // 隧道已死，清理后重建
+            console.error(`⚠️ SSH 隧道已失效，正在重建: ${name}`);
+            await this.closeTunnel(name);
         }
 
         return new Promise((resolve, reject) => {
@@ -220,6 +224,24 @@ export class SSHTunnelService {
      */
     getTunnels(): TunnelInfo[] {
         return Array.from(this.tunnels.values());
+    }
+
+    /**
+     * 检查隧道底层 SSH 连接和本地转发服务是否仍然存活
+     */
+    private isTunnelAlive(tunnel: TunnelInfo): boolean {
+        // ssh2 Client 内部维护了一个 socket，检查其可写状态
+        const sshSocket = (tunnel.client as any)._sock;
+        if (!sshSocket || sshSocket.destroyed || !sshSocket.writable) {
+            return false;
+        }
+
+        // 检查本地转发服务器是否仍在监听
+        if (!tunnel.server.listening) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
