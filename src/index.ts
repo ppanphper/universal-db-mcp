@@ -270,16 +270,41 @@ async function main() {
      * 优雅退出处理
      */
     function setupGracefulShutdown(server: DatabaseMCPServer) {
-      const shutdown = async () => {
-        console.error('\n🛑 正在停止服务器...');
-        await server.stop();
-        // 确保关闭所有 SSH 隧道
-        await sshTunnelService.closeAll();
-        process.exit(0);
-      };
+      let shuttingDown = false;
 
-      process.on('SIGINT', shutdown);
-      process.on('SIGTERM', shutdown);
+      async function shutdown(reason: string) {
+        if (shuttingDown) return;
+        shuttingDown = true;
+
+        console.error(`\n⏹️  正在关闭服务器 (${reason})...`);
+
+        try {
+          await Promise.race([
+            (async () => {
+              await server.stop();
+              await sshTunnelService.closeAll();
+            })(),
+            new Promise<void>((resolve) => setTimeout(() => {
+              console.error('⚠️  关闭超时，强制退出');
+              resolve();
+            }, 5000)),
+          ]);
+        } catch (err) {
+          console.error('关闭过程中出错:', err instanceof Error ? err.message : String(err));
+        } finally {
+          process.exit(0);
+        }
+      }
+
+      // 信号处理
+      process.on('SIGINT', () => shutdown('SIGINT'));
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+      // stdin 关闭处理
+      // MCP 客户端（Claude Desktop、Cursor 等）关闭对话时会断开 stdin 管道
+      process.stdin.resume();
+      process.stdin.on('end', () => shutdown('stdin-end'));
+      process.stdin.on('close', () => shutdown('stdin-close'));
     }
 
     /**
