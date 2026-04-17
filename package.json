@@ -1,6 +1,6 @@
 {
   "name": "universal-db-mcp-plus",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Enhanced fork of universal-db-mcp - Universal database MCP connector with multi-database config, SSH tunneling, and connection pooling",
   "main": "dist/index.js",
   "bin": {
