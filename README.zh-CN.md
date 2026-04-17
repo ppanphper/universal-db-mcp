@@ -2,24 +2,25 @@
   <img src="assets/logo.png" alt="Universal DB MCP Logo" width="200">
 </p>
 
-<h1 align="center">Universal DB MCP</h1>
+<h1 align="center">Universal DB MCP Plus</h1>
 <p align="center">
-  <strong>用自然语言连接 AI 与你的数据库</strong>
+  <strong>用自然语言连接 AI 与你的数据库 — 增强版 Fork</strong>
 </p>
 
 <p align="center">
-  一个实现了模型上下文协议（MCP）和 HTTP API 的通用数据库连接器，让 AI 助手能够使用自然语言查询和分析你的数据库。支持 Claude Desktop、Cursor、Windsurf、VS Code、ChatGPT 等 50+ 平台。
+  本项目是 <a href="https://github.com/Anarkh-Lee/universal-db-mcp">Anarkh-Lee/universal-db-mcp</a> 的增强版 Fork，在原项目基础上新增了多数据库配置、SSH 隧道、连接池管理、MongoDB 增强等功能。
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/universal-db-mcp"><img src="https://img.shields.io/npm/v/universal-db-mcp.svg?style=flat-square&color=blue" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/universal-db-mcp"><img src="https://img.shields.io/npm/dm/universal-db-mcp.svg?style=flat-square&color=green" alt="npm downloads"></a>
+  <a href="https://www.npmjs.com/package/universal-db-mcp-plus"><img src="https://img.shields.io/npm/v/universal-db-mcp-plus.svg?style=flat-square&color=blue" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/universal-db-mcp-plus"><img src="https://img.shields.io/npm/dm/universal-db-mcp-plus.svg?style=flat-square&color=green" alt="npm downloads"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square" alt="Node.js Version"></a>
-  <a href="https://github.com/Anarkh-Lee/universal-db-mcp/stargazers"><img src="https://img.shields.io/github/stars/Anarkh-Lee/universal-db-mcp?style=flat-square" alt="GitHub Stars"></a>
+  <a href="https://github.com/Anarkh-Lee/universal-db-mcp/stargazers"><img src="https://img.shields.io/github/stars/Anarkh-Lee/universal-db-mcp?style=flat-square" alt="上游 Stars"></a>
 </p>
 
 <p align="center">
+  <a href="#-fork-来源与增强">增强内容</a> •
   <a href="#-特性">特性</a> •
   <a href="#-快速开始">快速开始</a> •
   <a href="#-支持的数据库">数据库</a> •
@@ -30,6 +31,33 @@
 <p align="center">
   <a href="./README.md">English</a> | <a href="./README.zh-CN.md">中文文档</a>
 </p>
+
+---
+
+## 🔀 Fork 来源与增强
+
+> 本项目 Fork 自 [Anarkh-Lee/universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp)（上游 v2.14.0）。感谢原作者构建了如此优秀的通用数据库 MCP 连接器。本 Fork 在 npm 上以 [`universal-db-mcp-plus`](https://www.npmjs.com/package/universal-db-mcp-plus) 发布。
+
+### 与上游的差异
+
+| 分类 | 增强功能 | 说明 |
+|------|---------|------|
+| **多数据库配置** | `databases.json` / `databases.yaml` | 在单个配置文件中管理多个数据库连接，支持 `${ENV_VAR}` 环境变量引用 |
+| **SSH 隧道** | SSH 隧道服务 | 通过 SSH 跳板机访问远程数据库，自动端口转发 |
+| **连接池管理** | 连接池服务 | 可复用的适配器池，支持健康检查、自动重连和优雅关闭 |
+| **MongoDB 增强** | URI 和副本集支持 | 完整的 MongoDB 连接字符串支持，副本集可通过 SSH 隧道访问，改进 JSON 查询解析和错误提示 |
+| **工具描述** | 按数据库类型动态生成 | MCP 工具描述根据当前数据库类型动态生成（SQL vs MongoDB vs Redis），为 AI 提供更准确的上下文 |
+| **MySQL 优化** | `BASE TABLE` 过滤 | Schema 获取仅限基础表，避免视图和系统表干扰 |
+| **MCP 验证** | `scripts/verify-mcp.js` | 自动化 MCP stdio 协议验证脚本 |
+
+### 新增文件
+
+- `src/services/config-service.ts` — 多数据库配置管理
+- `src/services/connection-pool.ts` — 数据库适配器连接池及健康监控
+- `src/services/ssh-tunnel.ts` — SSH 隧道创建和生命周期管理
+- `src/utils/tool-descriptions.ts` — 按数据库类型动态生成 MCP 工具描述
+- `databases.json.example` / `databases.yaml.example` — 多数据库配置示例文件
+- `scripts/verify-mcp.js` — MCP 协议验证工具
 
 ---
 
@@ -75,7 +103,7 @@ AI: 让我帮你查询一下...
 ### 安装
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g universal-db-mcp-plus
 ```
 
 ### MCP 模式（Claude Desktop）
@@ -91,7 +119,7 @@ npm install -g universal-db-mcp
     "my-database": {
       "command": "npx",
       "args": [
-        "universal-db-mcp",
+        "universal-db-mcp-plus",
         "--type", "mysql",
         "--host", "localhost",
         "--port", "3306",
@@ -119,7 +147,7 @@ export HTTP_PORT=3000
 export API_KEYS=your-secret-key
 
 # 启动服务
-npx universal-db-mcp
+npx universal-db-mcp-plus
 ```
 
 ```bash
@@ -272,16 +300,16 @@ POST http://localhost:3000/mcp
 
 ```bash
 # 只读模式（默认）
-npx universal-db-mcp --type mysql ...
+npx universal-db-mcp-plus --type mysql ...
 
 # 读写但不能删除
-npx universal-db-mcp --type mysql --permission-mode readwrite ...
+npx universal-db-mcp-plus --type mysql --permission-mode readwrite ...
 
 # 自定义：只允许读和插入
-npx universal-db-mcp --type mysql --permissions read,insert ...
+npx universal-db-mcp-plus --type mysql --permissions read,insert ...
 
 # 完全控制（等价于原来的 --danger-allow-write）
-npx universal-db-mcp --type mysql --permission-mode full ...
+npx universal-db-mcp-plus --type mysql --permission-mode full ...
 ```
 
 **不同传输方式的权限配置：**
@@ -495,8 +523,8 @@ Universal DB MCP 可与任何支持 MCP 协议或 REST API 的平台配合使用
 欢迎贡献代码！请在提交 Pull Request 之前阅读我们的[贡献指南](./CONTRIBUTING.md)。
 
 ```bash
-# 克隆仓库
-git clone https://github.com/Anarkh-Lee/universal-db-mcp.git
+# 克隆本仓库
+git clone https://github.com/ppanphper/universal-db-mcp.git
 
 # 安装依赖
 npm install
@@ -514,7 +542,7 @@ npm test
 
 ## 🌟 Star 历史
 
-如果你觉得这个项目有用，请考虑给它一个 Star！你的支持帮助我们持续改进 Universal DB MCP。
+如果你觉得这个项目有用，请同时给[上游仓库](https://github.com/Anarkh-Lee/universal-db-mcp)和本增强版 Fork 一个 Star！
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Anarkh-Lee/universal-db-mcp&type=Date)](https://star-history.com/#Anarkh-Lee/universal-db-mcp&Date)
 
@@ -522,8 +550,12 @@ npm test
 
 详见 [CHANGELOG.md](./CHANGELOG.md) 了解详细的版本历史。
 
+## 🙏 致谢
+
+本项目基于 [Anarkh-Lee](https://github.com/Anarkh-Lee) 的 [universal-db-mcp](https://github.com/Anarkh-Lee/universal-db-mcp) 开发。我们衷心感谢原作者构建了这个全面的通用数据库 MCP 连接器。
+
 ---
 
 <p align="center">
-  由 <a href="https://github.com/Anarkh-Lee">Anarkh-Lee</a> 用 ❤️ 打造
+  原项目作者 <a href="https://github.com/Anarkh-Lee">Anarkh-Lee</a> · 增强版维护者 <a href="https://github.com/ppanphper">ppanphper</a>
 </p>
