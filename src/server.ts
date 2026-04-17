@@ -934,6 +934,14 @@ export class DatabaseMCPServer {
    * 停止服务器
    */
   async stop(): Promise<void> {
+    // 1. 关闭 MCP Server（释放 transport 层 stdin/stdout 监听器，使事件循环可以退出）
+    try {
+      await this.server.close();
+    } catch (err) {
+      console.error('关闭 MCP Server 时出错:', err instanceof Error ? err.message : String(err));
+    }
+
+    // 2. 关闭数据库连接
     if (this.useMultiDatabase) {
       await connectionPool.closeAll();
     } else if (this.adapter) {
